@@ -111,7 +111,7 @@
     q('[data-seal]').textContent = theme.seal;
     q('[data-poem]').replaceChildren(...theme.poem.map(line => make('p', line)));
     q('[data-art]').hidden = !key;
-    q('[data-empty-art]').hidden = Boolean(key);
+    q('[data-empty-art]').toggleAttribute('hidden', Boolean(key));
     if (key) { q('[data-art]').src = artSources[key]; q('[data-art]').alt = theme.alt; }
     else { q('[data-art]').removeAttribute('src'); q('[data-art]').alt = ''; }
     q('[data-stage]').dataset.theme = key || 'pending';
