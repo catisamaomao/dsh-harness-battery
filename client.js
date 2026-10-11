@@ -88,9 +88,11 @@ window.__ModuleLoader__.load({
       );
     }
     return {
-      name: 'dsh-harness-battery', inject: ['slots'],
+      name: 'dsh-harness-battery', inject: ['slots', 'layout'],
       apply(ctx) {
-        ctx.effect(() => ctx.slots.register({ name: 'main', key: PANEL }, Page));
+        // The renderer provides slots before the layout declares main during cold boot.
+        // Slot injection also disposes and remounts this entry when its owner reloads.
+        ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL }, Page));
         ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: PANEL, order: 140, label: '鲸相' }, WhaleIcon));
       },
     };
