@@ -113,7 +113,7 @@ def collect_record(batch_root, run_dir, job, result, grade=None):
         save(run_dir/'grade.json',grade);files['grade']='grade.json'
     for key,name in files.items():
         file=run_dir/name
-        if file.is_file():paths[key]=str(file.relative_to(batch_root));hashes[key]=sha(file)
+        if file.is_file():paths[key]=file.relative_to(batch_root).as_posix();hashes[key]=sha(file)
     status=result.get('status','blocked')
     if status in ('ok','success','complete'):status='completed'
     if result.get('censored') is True:

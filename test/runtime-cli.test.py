@@ -188,6 +188,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(manifest['status'], 'cancelled')
         self.assertEqual(len(manifest['runs']), 1)
         self.assertEqual(len(manifest['not_started_slots']), 1)
+        self.assertEqual(manifest['runs'][0]['paths']['meta'], 'runs/run-001/meta.json')
         self.assertTrue((path.parent/'runs/run-001/partial.txt').is_file())
         self.assertEqual(plugin_cli.make_report(path.parent)['included_runs'], 0)
 
