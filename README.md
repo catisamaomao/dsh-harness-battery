@@ -2,11 +2,11 @@
 
 DeepSeek Harness 的行为画像插件。侧栏打开“鲸相”，点击开始测试。完成后的卡面只有标题、填色雷达、后层鲸鱼娘立绘和一首二次元玩梗打油诗；设置与历史记录收在展开项中。
 
-**v0.1.2 为探索性预览。** 它记录当前受控配置下的公开回答、工具动作和实际产物，帮助观察你的 Harness 如何工作；尚不是经过心理测量标定的性格量表，也不证明这些特征由用户记忆造成。
+**v0.1.3 为探索性预览。** 它记录当前受控配置下的公开回答、工具动作和实际产物，帮助观察你的 Harness 如何工作；尚不是经过心理测量标定的性格量表，也不证明这些特征由用户记忆造成。
 
 ## 安装
 
-从 [GitHub Releases](https://github.com/catisamaomao/dsh-harness-battery/releases) 下载 `dsh-harness-battery-0.1.2.tgz` 和 `SHA256SUMS.txt`。在下载目录核对：
+从 [GitHub Releases](https://github.com/catisamaomao/dsh-harness-battery/releases) 下载 `dsh-harness-battery-0.1.3.tgz` 和 `SHA256SUMS.txt`。在下载目录核对：
 
 ```bash
 shasum -a 256 -c SHA256SUMS.txt
@@ -15,14 +15,14 @@ shasum -a 256 -c SHA256SUMS.txt
 在 Harness 的插件管理页安装本地 `.tgz`。若使用命令行，先完全退出 Harness，再运行：
 
 ```bash
-dsh plugin --profile desktop add ./dsh-harness-battery-0.1.2.tgz
+dsh plugin --profile desktop add ./dsh-harness-battery-0.1.3.tgz
 ```
 
 如果 `dsh` 尚未加入 PATH，macOS 安装包提供以下入口：
 
 ```bash
 "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" \
-  plugin --profile desktop add ./dsh-harness-battery-0.1.2.tgz
+  plugin --profile desktop add ./dsh-harness-battery-0.1.3.tgz
 ```
 
 重新打开 Harness，在插件管理页确认“鲸相”已启用，再点击侧栏“鲸相”。插件已经包含运行代码，无安装构建脚本，也无需 npm 账号或 npm 全局安装。
@@ -32,7 +32,7 @@ dsh plugin --profile desktop add ./dsh-harness-battery-0.1.2.tgz
 ## 使用
 
 1. 打开侧栏“鲸相”。插件自动检查环境，默认核心版 9 题，点击 **开始测试** 即可。
-2. 完成后自动打开本次画像。六向雷达的节点表示观测状态，固定填色多边形只作装饰；立绘和打油诗按本次已核验行为自动呈现。
+2. 完成后自动打开本次画像。六向雷达常显六个中文标签，悬停可查看说明；节点表示观测状态，固定填色多边形只作装饰；立绘和打油诗按本次已核验行为自动呈现。
 3. 如需调整题包、查看预算或历史，展开 **更多选项与记录**。
 
 卡面不再提供详情、导入或导出入口。原始七维证据仍保存为本地批次的 `report.json` 和 `report.md`，可直接从文件系统查阅：
@@ -81,7 +81,7 @@ dsh plugin --profile desktop add ./dsh-harness-battery-0.1.2.tgz
 npm test
 npm run check
 npm pack --ignore-scripts
-python3 -B scripts/audit-release.py --tarball dsh-harness-battery-0.1.2.tgz
+python3 -B scripts/audit-release.py --tarball dsh-harness-battery-0.1.3.tgz
 ```
 
 `npm test` 执行离线插件、运行器与发布扫描检查，**不会调用模型或读取真实记忆**。题包的两个冻结摘要也会复核。测试真实调用需要通过页面明确开始。

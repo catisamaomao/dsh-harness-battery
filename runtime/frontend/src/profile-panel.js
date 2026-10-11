@@ -40,15 +40,24 @@
     if (key) { q('[data-art]').src = artSources[key]; q('[data-art]').alt = theme.alt; }
     else { q('[data-art]').removeAttribute('src'); q('[data-art]').alt = ''; }
     q('[data-stage]').dataset.theme = key || 'pending';
-    const names = ['授权与范围','核验行动','表达形态','证据取用','异议回应','组织与汇报'];
+    const names = ['授权范围','核验行动','表达方式','证据取用','异议回应','组织汇报'];
+    const explanations = [
+      '看授权内做了什么，以及是否改动范围外的内容。',
+      '看是否实际发起检查，以及留下了什么验证记录。',
+      '看回答怎样组织措辞、段落与列表。',
+      '看材料查阅记录，以及证据和不确定性的说明。',
+      '看面对有据或错误前提时，怎样回应和提出异议。',
+      '看任务如何推进、受阻时怎样处理，以及怎样报告结果。'
+    ];
     const statuses = {observed:'有事实观察',partial:'部分证据或待复核',unknown:'暂无证据'};
     const points = core.constellation(state.report);
     points.forEach((point,i) => {
       const vertex = q('[data-vertex="'+i+'"]');
       vertex.dataset.status = point.status;
-      vertex.querySelector('title').textContent = names[i]+'：'+statuses[point.status];
+      vertex.querySelector('text').textContent = names[i];
+      vertex.querySelector('title').textContent = names[i]+'：'+explanations[i]+' 本次：'+statuses[point.status];
     });
-    q('#star-description').textContent = points.map((point,i) => names[i]+'：'+statuses[point.status]).join('；')+'。填色雷达轮廓为固定造型，仅节点显示证据状态，不表示性格强弱或分数。';
+    q('#star-description').textContent = points.map((point,i) => names[i]+'：'+explanations[i]+' 本次：'+statuses[point.status]).join('；')+'。填色雷达轮廓为固定造型，仅节点显示证据状态，不表示性格强弱或分数。';
   }
   renderArt();
 })();
