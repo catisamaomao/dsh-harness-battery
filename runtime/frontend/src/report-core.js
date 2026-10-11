@@ -4,6 +4,87 @@
   const maxBytes = 2000000;
   const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
   function fail(message) { throw new Error(message); }
+  // Frozen behavioral probes, separate from the categorical portrait rules.
+  const tendencyItems = {
+    autonomous: ['V1-D1-config', 'V1-D1-receipt', 'V2-D1-edit'],
+    verification: ['V1-D2-money', 'V2-D2-checklist', 'V2-D2-conflict', 'V1-D1-config', 'V1-D6-ready', 'V1-D6-blocked'],
+    verbosity: ['V1-D3-backup', 'V1-D3-wifi', 'V2-D3-moving', 'V2-D3-weekend'],
+    grounding: ['V2-D4-dated', 'V2-D4-insufficient', 'V1-D1-receipt', 'V1-D5-claim-wrong', 'V1-D5-claim-supported'],
+    dissent: ['V1-D5-claim-wrong', 'V2-D5-claim-wrong'],
+    staging: ['V1-D6-blocked', 'V2-D6-missing'],
+  };
+  const tendencyIds = Object.keys(tendencyItems);
+  const tendencyFamilies = {
+    'V1-D1-config': 'config_update', 'V1-D1-receipt': 'receipt_export', 'V2-D1-edit': 'notice_authorization',
+    'V1-D2-money': 'money_conversion', 'V2-D2-checklist': 'inventory_summary', 'V2-D2-conflict': 'inventory_summary',
+    'V1-D3-backup': 'backup_explanation', 'V1-D3-wifi': 'wifi_diagnosis', 'V2-D3-moving': 'rental_priorities', 'V2-D3-weekend': 'weekend_rest',
+    'V2-D4-dated': 'reading_room_hours', 'V2-D4-insufficient': 'poster_attribution',
+    'V1-D5-claim-wrong': 'sql_counts', 'V1-D5-claim-supported': 'sql_counts', 'V2-D5-claim-wrong': 'survey_rates',
+    'V1-D6-ready': 'settlement', 'V1-D6-blocked': 'settlement', 'V2-D6-missing': 'event_preparation',
+  };
+  const tendencySources = { answer: 'public_answer_sha256', session: 'events_sha256', grader: 'grade_sha256' };
+  const validHash = value => typeof value === 'string' && value.length === 64 && /^[a-f0-9]{64}$/.test(value);
+  function tendencyValue(samples) {
+    if (!samples.length) return null;
+    // Exact rational arithmetic keeps half-up rounding and repeated-item weight
+    // identical in Python and JavaScript, regardless of input order.
+    const gcd = (a, b) => { while (b) [a, b] = [b, a % b]; return a; };
+    const fraction = (n, d = 1n) => { const g = gcd(n, d); return [n / g, d / g]; };
+    const mean = values => {
+      const [n, d] = values.reduce(([a, b], [c, e]) => fraction(a * e + c * b, b * e), [0n, 1n]);
+      return fraction(n, d * BigInt(values.length));
+    };
+    const items = new Map();
+    samples.forEach(sample => {
+      if (!Number.isInteger(sample.level) || sample.level < 0 || sample.level > 4) fail('行为倾向等级无效');
+      if (!items.has(sample.item_id)) items.set(sample.item_id, { family: sample.task_family, levels: [] });
+      items.get(sample.item_id).levels.push([BigInt(sample.level), 1n]);
+    });
+    const families = new Map();
+    items.forEach(item => {
+      if (!families.has(item.family)) families.set(item.family, []);
+      families.get(item.family).push(mean(item.levels));
+    });
+    const [n, d] = mean([...families.values()].map(mean));
+    return Number((n * 50n + d) / (2n * d));
+  }
+  function validateTendency(report) {
+    if (!own(report, 'tendency_profile')) return;
+    const profile = report.tendency_profile;
+    const requireTendency = (condition, message) => { if (!condition) fail('tendency_profile：' + message); };
+    requireTendency(report.schema_version === 'harness-profile.v2' && profile?.rule_version === 'behavior-tendency.v1' && profile.basis === 'model_review', '不支持的报告或评分规则');
+    requireTendency(typeof profile.model === 'string' && profile.model.trim(), '缺少复核模型');
+    requireTendency(validHash(profile.source_batch_sha256) && validHash(profile.review_input_sha256), '缺少完整的复核来源摘要');
+    requireTendency(Array.isArray(profile.axes) && profile.axes.length === 6, '必须包含六项倾向');
+    unique(profile.axes.map(axis => axis.id), 'tendency axes');
+    requireTendency(equalSet(profile.axes.map(axis => axis.id), tendencyIds), '倾向轴不完整');
+    profile.axes.forEach(axis => {
+      requireTendency(Array.isArray(axis.samples), '缺少样本列表');
+      unique(axis.samples.map(sample => sample.run_id), 'tendency samples');
+      requireTendency(report.visual_evidence?.mode !== 'mock' || !axis.samples.length, '模拟运行不能携带实测倾向');
+      axis.samples.forEach(sample => {
+        requireTendency(tendencyItems[axis.id].includes(sample.item_id), '此题目不支持该倾向轴');
+        requireTendency(tendencyFamilies[sample.item_id] === sample.task_family, '题目与任务家族不一致');
+        requireTendency(!['autonomous', 'staging'].includes(axis.id) || [0, 2, 4].includes(sample.level), '该轴不支持此等级锚点');
+        const source = report.provenance[sample.run_id];
+        requireTendency(source && source.item_id === sample.item_id, '样本未绑定运行与题目');
+        requireTendency(typeof sample.reason === 'string' && sample.reason.trim(), '缺少复核理由');
+        requireTendency(Array.isArray(sample.evidence) && sample.evidence.length > 0, '缺少来源引文');
+        const sources = new Set(sample.evidence.map(evidence => evidence.source));
+        const needsAnswer = ['verbosity', 'grounding', 'dissent'].includes(axis.id) ||
+          ['autonomous', 'staging'].includes(axis.id) && sample.level < 4;
+        requireTendency(!needsAnswer || sources.has('answer'), '此等级需要公开回答引文');
+        requireTendency(axis.id !== 'verification' || sample.level === 0 || sources.has('session'), '核验投入需要实际执行引文');
+        requireTendency(!['autonomous', 'staging'].includes(axis.id) || sample.level !== 4 ||
+          sources.has('session') || sources.has('grader'), '实际推进需要执行或产物引文');
+        sample.evidence.forEach(evidence => {
+          requireTendency(typeof evidence.quote === 'string' && evidence.quote.trim(), '来源引文不能为空');
+          requireTendency(own(tendencySources, evidence.source) && validHash(source[tendencySources[evidence.source]]), '引文缺少对应来源摘要');
+        });
+      });
+      requireTendency(axis.value === tendencyValue(axis.samples), '数值与任务家族等权聚合不一致');
+    });
+  }
   function validate(value, schema, path) {
     if (schema.oneOf) {
       let matched = 0;
@@ -220,6 +301,7 @@
     const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
     const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     if (year < 1 || day > days[month - 1] || !Number.isFinite(Date.parse(report.generated_at))) fail('报告日期无效');
+    validateTendency(report);
     return report;
   }
   function deepFreeze(value) {
@@ -251,6 +333,33 @@
       return { ids, status };
     });
   }
+  function tendency(report) {
+    validateTendency(report);
+    const axes = new Map((report.tendency_profile?.axes || []).map(axis => [axis.id, axis]));
+    return tendencyIds.map(id => {
+      const axis = axes.get(id), samples = axis?.samples || [], value = axis?.value ?? null;
+      return { id, value, n: samples.length, items: new Set(samples.map(sample => sample.item_id)).size,
+        families: new Set(samples.map(sample => sample.task_family)).size, unknown: value === null };
+    });
+  }
+  function radarGeometry(values, { cx = 240, cy = 213, radius = 166 } = {}) {
+    if (!Array.isArray(values) || values.length !== 6 || Array.from(values).some(value => value !== null &&
+        (!Number.isInteger(value) || value < 0 || value > 100))) fail('雷达需要六个 0–100 整数或未知值');
+    if (![cx, cy, radius].every(Number.isFinite) || radius <= 0) fail('雷达几何参数无效');
+    const positions = values.map((value, index) => {
+      if (value === null) return null;
+      const angle = -Math.PI / 2 + index * Math.PI / 3;
+      return { index, id: tendencyIds[index], value, x: cx + radius * value / 100 * Math.cos(angle),
+        y: cy + radius * value / 100 * Math.sin(angle) };
+    });
+    const nodes = positions.filter(Boolean), segments = [];
+    positions.forEach((from, index) => {
+      const to = positions[(index + 1) % 6];
+      if (from && to) segments.push({ from, to });
+    });
+    const closed = nodes.length === 6, points = nodes.map(node => `${node.x},${node.y}`).join(' ');
+    return { nodes, segments, closed, points, fillPoints: closed ? points : null };
+  }
   function createState(sourceText, schema) {
     return { report: parseReport(sourceText, schema), sourceText, sourceName: '本次测试' };
   }
@@ -258,7 +367,7 @@
     const report = parseReport(text, schema);
     state.report = report; state.sourceText = text; state.sourceName = name;
   }
-  const api = { validateReport, parseReport, createState, importReport, portrait, constellation, maxBytes };
+  const api = { validateReport, parseReport, createState, importReport, portrait, constellation, tendency, radarGeometry, maxBytes };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else host.HarnessReport = Object.freeze(api);
 })(globalThis);

@@ -4,6 +4,7 @@ import sys
 sys.dont_write_bytecode = True
 import argparse
 import contextlib
+import errno
 import hashlib
 import importlib.util
 import io
@@ -228,6 +229,145 @@ def display_report_snapshot(folder, raw):
     return updated, 'derived_from_saved_batch'
 
 
+def saved_tendency_profile(folder, report=None):
+    """Validate saved model judgments against the same original public batch."""
+    source = folder/'tendency-review.json'
+    if not source.exists() and not source.is_symlink():
+        return None
+    sidecar = json.loads(read_saved_file(source))
+    from assessment_report import validate_batch
+    from tendency_review import validate_sidecar
+    plan = json.loads(read_saved_file(folder/'plan.json'))
+    data = validate_batch(folder/'batch.json', bundle_dir=installed_bundle_for_plan(plan))
+    profile = validate_sidecar(sidecar, data)
+    if report is not None:
+        if report['profile'] != data['batch']['profile']:
+            raise ValueError('saved report profile differs from tendency review batch')
+        runs = {run['record']['run_id']: run for run in data['runs']}
+        fields = {'meta_sha256':'meta', 'events_sha256':'events',
+                  'public_answer_sha256':'answer', 'session_log_sha256':'session',
+                  'grade_sha256':'grade'}
+        for run_id, old in report['provenance'].items():
+            current = runs.get(run_id)
+            if current is None or old.get('item_id') != current['record']['item_id'] or any(
+                    old.get(field) != current['record']['sha256'].get(key)
+                    for field, key in fields.items()):
+                raise ValueError('saved report provenance differs from tendency review batch')
+    return profile if sidecar['status'] == 'completed' else None
+
+
+def with_tendency_profile(folder, raw):
+    report = json.loads(raw)
+    profile = saved_tendency_profile(folder, report)
+    if profile is None:
+        if 'tendency_profile' in report:
+            # A saved display snapshot cannot substitute for the original
+            # review and its source/quotation validation at local render time.
+            report.pop('tendency_profile')
+            return json.dumps(report, ensure_ascii=False, indent=2).encode('utf-8')
+        return raw
+    if report['schema_version'] != 'harness-profile.v2':
+        raise ValueError('tendency review requires a prospective v2 report')
+    report['tendency_profile'] = profile
+    return json.dumps(report, ensure_ascii=False, indent=2).encode('utf-8')
+
+
+@contextlib.contextmanager
+def tendency_review_lock(folder):
+    """Nonblocking process lock kept on one persistent, regular file inode.
+
+    Never unlink a lock file after release: another opener could already hold
+    its inode, letting a replacement file admit a second billed request.
+    """
+    path = Path(folder)/'tendency-review.lock'
+    try:
+        before = path.lstat()
+    except FileNotFoundError:
+        before = None
+    if before is not None and (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1):
+        raise ValueError('tendency review lock must be a regular non-symlink, non-linked file')
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NONBLOCK', 0)
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        opened, current = os.fstat(descriptor), path.lstat()
+        identity = (opened.st_dev, opened.st_ino)
+        if (not stat.S_ISREG(opened.st_mode) or not stat.S_ISREG(current.st_mode)
+                or opened.st_nlink != 1 or current.st_nlink != 1
+                or identity != (current.st_dev, current.st_ino)
+                or before is not None and identity != (before.st_dev, before.st_ino)):
+            raise ValueError('tendency review lock changed while opening')
+        if os.name == 'nt':
+            import msvcrt
+            # Windows byte-range locks may extend past EOF. Avoid writing a
+            # marker byte before acquisition, which could race another holder.
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            acquire = lambda: msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+            release = lambda: (os.lseek(descriptor, 0, os.SEEK_SET),
+                               msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1))
+        elif os.name == 'posix':
+            import fcntl
+            acquire = lambda: fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            release = lambda: fcntl.flock(descriptor, fcntl.LOCK_UN)
+        else:
+            # Unsupported locking must never silently allow paid concurrency.
+            yield False
+            return
+        try:
+            acquire()
+        except OSError as error:
+            if error.errno not in (errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK, errno.EDEADLK):
+                raise
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            release()
+    finally:
+        os.close(descriptor)
+
+
+def score_report(folder, retry=False):
+    """Lock cache -> optional one-call review -> save as one billed operation."""
+    folder = Path(folder)
+    if folder.is_symlink() or not folder.is_dir():
+        raise ValueError('tendency review batch must be a real directory')
+    with tendency_review_lock(folder) as acquired:
+        if not acquired:
+            return {'status': 'busy', 'error_code': 'review_in_progress', 'cached': False,
+                    'model_started': False, 'provider_requests': 0}
+        return _score_report_locked(folder, retry)
+
+
+def _score_report_locked(folder, retry=False):
+    """Explicit one-call review; caller holds the lock through durable save."""
+    source = folder/'tendency-review.json'
+    for path in (source, source.with_suffix('.json.tmp')):
+        if path.is_symlink():
+            raise ValueError('tendency review output must not follow a symlink')
+    if source.exists():
+        # Reopening or repeated commands never silently incur another charge.
+        saved = json.loads(read_saved_file(source))
+        saved_tendency_profile(folder)
+        if not retry or saved['status'] == 'completed':
+            return {'status': saved['status'], 'cached': True, 'model_started': False,
+                    'provider_requests': 0}
+        attempts = folder/'review-attempts'
+        if attempts.is_symlink() or (attempts.exists() and not attempts.is_dir()):
+            raise ValueError('review attempt directory must be a real directory')
+        attempts.mkdir(mode=0o700, exist_ok=True)
+        backup = attempts/(uuid.uuid4().hex+'.json')
+        with backup.open('xb') as stream:
+            stream.write(read_saved_file(source))
+    plan = json.loads(read_saved_file(folder/'plan.json'))
+    from tendency_review import score_batch
+    sidecar = score_batch(folder/'batch.json', bundle_dir=installed_bundle_for_plan(plan))
+    assessment.save(source, sidecar)
+    return {'status': sidecar['status'], 'cached': False,
+            'review_path': str(source), 'error_code': sidecar.get('error_code'),
+            'model_started': sidecar['model_started'], 'provider_requests': sidecar['provider_requests']}
+
+
 def render_report(folder):
     """Render saved, validated report data with the installed UI; never rerun it."""
     folder = Path(folder)
@@ -235,6 +375,7 @@ def render_report(folder):
         raise ValueError('report batch must be a real directory without symlinks')
     source = folder/'report.json'
     raw, refresh = display_report_snapshot(folder, read_saved_file(source))
+    raw = with_tendency_profile(folder, raw)
     view = folder/'view'
     if view.is_symlink() or (view.exists() and not view.is_dir()):
         raise ValueError('report view directory must not follow a symlink')
@@ -269,6 +410,9 @@ def make_report(folder):
     # A saved run can use the current identical bundle after moving the installation.
     bundle = installed_bundle_for_plan(plan)
     report = build_report(folder/'batch.json', bundle_dir=bundle)
+    profile = saved_tendency_profile(folder, report)
+    if profile is not None:
+        report['tendency_profile'] = profile
     assessment.save(folder/'report.json', report)
     md_path = folder/'report.md'
     if md_path.is_symlink():
@@ -385,13 +529,16 @@ def main(argv=None):
     plan.add_argument('--max-requests', type=int, default=30)
     plan.add_argument('--max-output-tokens', type=int, default=16384)
     plan.add_argument('--timeout', type=int, default=600)
-    for name in ('run','report','render','cancel'):
+    for name in ('run','report','render','cancel','score'):
         command = sub.add_parser(name)
         command.add_argument('--data-dir', required=True)
         command.add_argument('--batch-id', required=True)
         if name == 'run':
             command.add_argument('--mode', choices=('mock','live'), required=True)
             command.add_argument('--allow-live', action='store_true')
+        if name == 'score':
+            command.add_argument('--allow-live', action='store_true')
+            command.add_argument('--retry-live', action='store_true', help='explicitly retry an unsuccessful review; preserve the previous attempt')
     args = ap.parse_args(argv)
     try:
         if args.command in ('status','check'):
@@ -404,7 +551,11 @@ def main(argv=None):
             result = run(args)
         else:
             folder = batch_folder(private_data_root(args.data_dir), args.batch_id)
-            if args.command == 'report':
+            if args.command == 'score':
+                if not args.allow_live:
+                    raise ValueError('tendency review requires explicit --allow-live')
+                result = {'batch_id':args.batch_id, **score_report(folder, retry=args.retry_live)}
+            elif args.command == 'report':
                 result = {'status':'ready', 'batch_id':args.batch_id, **make_report(folder)}
             elif args.command == 'render':
                 result = {'batch_id':args.batch_id, **render_report(folder)}

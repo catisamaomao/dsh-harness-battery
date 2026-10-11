@@ -974,9 +974,20 @@ def _excerpt(text, terms):
 def render_markdown(report):
     inv = report['inventory']
     lines = [f"# {report['profile']}：行为观察报告", '',
-             f"计划 {inv['total_runs']} 次运行；纳入观察 {inv['included_runs']} 次；语义复核 0 次。", '',
+             f"计划 {inv['total_runs']} 次运行；纳入观察 {inv['included_runs']} 次；人工复核 0 次。", '',
              '本报告描述当前隔离配置在这些场景中的表现，不提供人格分数，也不能判断由记忆养成。预算截断的运行单列为 censored，不计作性格失败。', '',
              '| 维度 | 当前证据 |', '| --- | --- |']
+    if report.get('tendency_profile'):
+        from tendency_review import LABELS
+        profile = report['tendency_profile']
+        lines[-2:] = ['## 本轮行为倾向', '',
+            '独立 AI 依据公开材料按行为锚点判读，再按任务族等权汇总。0–100 只表示行为两端的相对位置，高低无好坏；未判定不当作零。不推断稳定人格。', '',
+            '| 倾向 | 位置 / 100 | 可判读记录 |', '| --- | --- | --- |']
+        for axis in profile['axes']:
+            reading = '未定' if axis['value'] is None else str(axis['value'])
+            lines.append(f"| {LABELS[axis['id']]} | {reading} | {len(axis['samples'])} |")
+        lines.extend(['', f"判读规则：`{profile['rule_version']}`；模型：`{profile['model']}`。逐项引文与理由保存在本地 tendency-review.json。", '',
+                      '## 原始七维观察', '', '| 维度 | 当前证据 |', '| --- | --- |'])
     status_labels = {'not_established': '未知', 'pending_review': '待复核', 'limited_observation': '有限观察'}
     for dim in report['dimensions']:
         lines.append(f"| {dim['id']} {dim['label']} | {status_labels[dim['status']]} |")

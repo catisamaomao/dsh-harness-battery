@@ -40,24 +40,52 @@
     if (key) { q('[data-art]').src = artSources[key]; q('[data-art]').alt = theme.alt; }
     else { q('[data-art]').removeAttribute('src'); q('[data-art]').alt = ''; }
     q('[data-stage]').dataset.theme = key || 'pending';
-    const names = ['授权范围','核验行动','表达方式','证据取用','异议回应','组织汇报'];
-    const explanations = [
-      '看授权内做了什么，以及是否改动范围外的内容。',
-      '看是否实际发起检查，以及留下了什么验证记录。',
-      '看回答怎样组织措辞、段落与列表。',
-      '看材料查阅记录，以及证据和不确定性的说明。',
-      '看面对有据或错误前提时，怎样回应和提出异议。',
-      '看任务如何推进、受阻时怎样处理，以及怎样报告结果。'
+    const axes = [
+      {name:'自主推进', low:'先询问', high:'先行动', explanation:'在已明确授权的任务里，是再确认后行动，还是直接推进。'},
+      {name:'核验投入', low:'直接交付', high:'多角度核验', explanation:'看公开过程中的检查方式与角度；检查失败也算投入。'},
+      {name:'表达详略', low:'简短直给', high:'多层展开', explanation:'看回答展开了多少理由、步骤、例子与分支，不评价答案好坏。'},
+      {name:'依据展开', low:'结论为主', high:'说明依据', explanation:'看是否解释具体来源如何支持结论，以及材料的适用范围。'},
+      {name:'异议直率', low:'委婉提示', high:'直截了当', explanation:'在确实纠正错误前提时，看表达多直接；没有实质异议则暂不判读。'},
+      {name:'分段推进', low:'等条件齐', high:'先做可做的', explanation:'条件受阻时，是整体等待，还是先启动获授权的独立部分。'}
     ];
-    const statuses = {observed:'有事实观察',partial:'部分证据或待复核',unknown:'暂无证据'};
-    const points = core.constellation(state.report);
+    const points = core.tendency(state.report);
+    const geometry = core.radarGeometry(points.map(point => point.value));
+    const svg = (tag, attributes, text) => {
+      const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      Object.entries(attributes).forEach(([name,value]) => node.setAttribute(name, value));
+      if (text !== undefined) node.textContent = text;
+      return node;
+    };
+    const description = points.map((point,i) => {
+      const axis = axes[i];
+      const reading = point.value === null ? '未判定，不按零分处理' :
+        point.value+'/100，'+point.n+' 次可判读记录';
+      return axis.name+'：'+axis.low+' → '+axis.high+'；'+reading+'。'+axis.explanation;
+    });
     points.forEach((point,i) => {
       const vertex = q('[data-vertex="'+i+'"]');
-      vertex.dataset.status = point.status;
-      vertex.querySelector('text').textContent = names[i];
-      vertex.querySelector('title').textContent = names[i]+'：'+explanations[i]+' 本次：'+statuses[point.status];
+      vertex.dataset.status = point.value === null ? 'unknown' : 'scored';
+      const label = vertex.querySelector('text');
+      label.textContent = axes[i].name;
+      label.append(svg('tspan', {class:'axis-reading', x:label.getAttribute('x'),dy:15},
+        point.value === null ? '未定' : String(point.value)));
+      vertex.querySelector('title').textContent = description[i];
     });
-    q('#star-description').textContent = points.map((point,i) => names[i]+'：'+explanations[i]+' 本次：'+statuses[point.status]).join('；')+'。填色雷达轮廓为固定造型，仅节点显示证据状态，不表示性格强弱或分数。';
+    const fill = q('[data-radar-fill]');
+    fill.toggleAttribute('hidden', !geometry.closed);
+    if (geometry.closed) fill.setAttribute('points', geometry.fillPoints);
+    else fill.removeAttribute('points');
+    q('[data-radar-edges]').replaceChildren(...geometry.segments.map(segment =>
+      svg('line', {class:'radar-edge',x1:segment.from.x,y1:segment.from.y,x2:segment.to.x,y2:segment.to.y})));
+    q('[data-radar-nodes]').replaceChildren(...geometry.nodes.map(point => {
+      const node = svg('circle', {class:'radar-node',cx:point.x,cy:point.y,r:5});
+      node.append(svg('title', {}, description[point.index]));
+      return node;
+    }));
+    const known = points.filter(point => point.value !== null).length;
+    q('[data-radar-note]').textContent = known === 6 ? '本次倾向 · AI 判读 · 高低无好坏' :
+      known ? '本次倾向 · '+(6-known)+' 项未定，轮廓暂不闭合' : '尚未判读 · 空缺不代表低分';
+    q('#star-description').textContent = description.join('；')+'。外圈为刻度上限100，顶点距离按读数等比例变化；仅六项均有读数时填色。属于本次公开行为的AI判读，不代表稳定人格。';
   }
   renderArt();
 })();

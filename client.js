@@ -75,7 +75,7 @@ window.__ModuleLoader__.load({
         h('section', { className: 'whale-card whale-start', 'aria-label': '开始测试' },
           h('div', null,
             h('h2', null, selected ? '再认识它一点。' : '你的 Harness，是什么样？'),
-            h('p', { className: 'whale-muted' }, `${shownPack === 'core' ? '核心版 · 9 题' : '扩展版 · 23 题'}，完成后自动展示画像。通过 DeepSeek 测试，按实际模型用量计费。`),
+            h('p', { className: 'whale-muted' }, `${shownPack === 'core' ? '核心版 · 9 题' : '扩展版 · 23 题'}，完成后自动展示画像。题目作答与独立画像判读均通过 DeepSeek，按实际模型用量计费。`),
             h('p', { className: 'whale-muted' }, shownMemory ? '已选择记忆副本：开始后会复制本机 Memorix 记忆，并将测试选中的内容发送给 DeepSeek。' : '默认不带记忆。可在更多选项中开启。'),
             !active && (!environment?.can_run || !state?.supported) && h('p', { className: 'whale-status', role: 'status' }, checking || !state ? '正在准备…' : !state.supported ? '首版测试仅支持 macOS。' : '还需要完成环境配置，请展开更多选项查看。')
           ),
@@ -96,7 +96,7 @@ window.__ModuleLoader__.load({
               h('p', { className: 'whale-muted' }, shownPack === 'core' ? '文档、计算、沟通、纠错与受阻任务。' : '增加租房、清单核对、来源冲突与活动筹备，含原 9 题。'),
               h('label', { className: 'whale-memory' }, h('input', { type: 'checkbox', checked: shownMemory, disabled: !!active || busy, onChange: event => setMemory(event.target.checked) }), h('span', null, '带上 Memorix 记忆副本')),
               h('p', { className: 'whale-muted' }, '默认关闭。开启后点击开始，会复制本机 Memorix 记忆，并将测试选中的内容发送给 DeepSeek；原记忆不会被测试改写。'),
-              h('p', { className: 'whale-muted' }, `本次预算上限：${total * 30} 次模型请求，每次最多 16,384 输出 token。每题最长 10 分钟。`),
+              h('p', { className: 'whale-muted' }, `本次预算上限：${total * 30} 次答题请求（每次最多 16,384 输出 token），外加 1 次画像判读（最多 8,192 输出 token）。每题最长 10 分钟，判读最长 90 秒。`),
               h('p', { className: 'whale-muted' }, '点击开始即授权本次模型调用。测试在独立会话中进行。')
             ),
             h('section', { className: 'whale-card', 'aria-label': '环境检查' },

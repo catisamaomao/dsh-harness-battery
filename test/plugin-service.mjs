@@ -21,7 +21,7 @@ const childScript = `
    const finish=status=>{emit({ok:status==='completed',status});process.exit(0)};
    process.on('SIGTERM',()=>finish('cancelled'));
    setTimeout(()=>finish(process.env.WHALE_MOCK_STATUS||'completed'),Number(process.env.WHALE_MOCK_DELAY||10));
- } else if(command==='report') {const folder=path.join(get('--data-dir'),'batches',batch);const file=path.join(folder,'report.html');fs.writeFileSync(file,'<!doctype html><p>旧版封面</p>');fs.writeFileSync(path.join(folder,'report.json'),JSON.stringify({saved:'原始报告'}));emit({report_html:file});}
+ } else if(command==='score') { process.on('SIGTERM',()=>process.exit(0)); setTimeout(()=>emit({status:process.env.WHALE_MOCK_REVIEW_STATUS||'completed'}),Number(process.env.WHALE_MOCK_REVIEW_DELAY||1)); } else if(command==='report') {const folder=path.join(get('--data-dir'),'batches',batch);const file=path.join(folder,'report.html');fs.writeFileSync(file,'<!doctype html><p>旧版封面</p>');fs.writeFileSync(path.join(folder,'report.json'),JSON.stringify({saved:'原始报告'}));emit({report_html:file});}
  else if(command==='render') {
    if(process.env.WHALE_MOCK_RENDER_FAIL==='1'){emit({status:'error'});process.exit(2);}
    const folder=path.join(get('--data-dir'),'batches',batch,'view');fs.mkdirSync(folder,{recursive:true});
@@ -63,9 +63,9 @@ test('one bounded run, fixed args, no shell, private durable history and report 
   const started = await service.start({ battery: 'extended', includeMemory: false });
   await assert.rejects(service.start({ battery: 'core', includeMemory: false }), /已有测试/);
   await until(() => !service.active);
-  const run = (await service.state()).runs[0]; assert.equal(run.status, 'completed'); assert.equal(run.hasReport, true); assert.equal(run.budget.maxProviderRequests, 690);
+  const run = (await service.state()).runs[0]; assert.equal(run.status, 'completed'); assert.equal(run.hasReport, true); assert.equal(run.budget.maxProviderRequests, 691);
   assert.match((await service.report(started.id)).toString(), /鲸相报告/);
-  assert.deepEqual(calls.map(call => call.args[2]), ['plan', 'run', 'report', 'render']);
+  assert.deepEqual(calls.map(call => call.args[2]), ['plan', 'run', 'score', 'report', 'render']);
   for (const call of calls) {
     assert.equal(call.options.shell, false);
     assert.equal(call.options.env.PYTHONUTF8, '1');
@@ -170,4 +170,27 @@ test('non-macOS refuses model execution and a symlink data root is rejected', as
   await assert.rejects(unsupported.start({ battery: 'core', includeMemory: false }), /仅支持 macOS/); unsupported.close();
   const destination = path.join(root, 'target'); await fs.mkdir(destination); const link = path.join(root, 'link'); if (!await symlinkOrSkip(t, destination, link, true)) return;
   const invalid = new BatteryService({ runtime, dataDir: link, python: 'unused' }); await assert.rejects(invalid.ready, /符号链接/); invalid.close();
+});
+
+
+test('review failure preserves the completed assessment and its report without retrying', async t => {
+  const { service, calls } = await setup(t, { WHALE_MOCK_REVIEW_STATUS: 'unavailable' });
+  await service.start({ battery: 'core', includeMemory: false });
+  await until(() => !service.active);
+  const run = (await service.state()).runs[0];
+  assert.equal(run.status, 'completed'); assert.equal(run.hasReport, true);
+  assert.match(run.message, /判读暂不可用/);
+  assert.equal(calls.filter(call => call.args[2] === 'score').length, 1);
+  assert.equal(run.budget.maxProviderRequests, 271);
+});
+
+test('review stays cancellable and does not turn cancellation into successful completion', async t => {
+  const { service, calls } = await setup(t, { WHALE_MOCK_REVIEW_DELAY: '10000' });
+  const started = await service.start({ battery: 'core', includeMemory: false });
+  await until(() => calls.some(call => call.args[2] === 'score'));
+  assert.equal(service.active.status, 'running');
+  await service.cancel(started.id); await until(() => !service.active);
+  const run = (await service.state()).runs[0];
+  assert.equal(run.status, 'cancelled'); assert.equal(run.hasReport, true);
+  assert.equal(calls.filter(call => call.args[2] === 'score').length, 1);
 });

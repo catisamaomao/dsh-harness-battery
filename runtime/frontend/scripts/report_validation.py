@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 import re
 from datetime import datetime
+from fractions import Fraction
 
 MAX_REPORT_BYTES = 2_000_000
 DIMENSIONS = [f"D{i}" for i in range(1, 8)]
@@ -115,6 +116,38 @@ v2['visual_evidence'] = obj({
         'task_family': {'enum': sorted(set(_portrait.TASK_FAMILIES.values()))}, 'run_id': ID,
         'observation_ids': {'type': 'array', 'items': ID, 'minItems': 1, 'maxItems': 1}})),
 })
+TENDENCY_AXES = {
+    'autonomous': ('V1-D1-config', 'V1-D1-receipt', 'V2-D1-edit'),
+    'verification': ('V1-D2-money', 'V2-D2-checklist', 'V2-D2-conflict',
+                     'V1-D1-config', 'V1-D6-ready', 'V1-D6-blocked'),
+    'verbosity': ('V1-D3-backup', 'V1-D3-wifi', 'V2-D3-moving', 'V2-D3-weekend'),
+    'grounding': ('V2-D4-dated', 'V2-D4-insufficient', 'V1-D1-receipt',
+                  'V1-D5-claim-wrong', 'V1-D5-claim-supported'),
+    'dissent': ('V1-D5-claim-wrong', 'V2-D5-claim-wrong'),
+    'staging': ('V1-D6-blocked', 'V2-D6-missing'),
+}
+TENDENCY_FAMILIES = {item: _portrait.TASK_FAMILIES[item]
+                     for items in TENDENCY_AXES.values() for item in items}
+TENDENCY_SOURCES = {'answer': 'public_answer_sha256', 'session': 'events_sha256',
+                    'grader': 'grade_sha256'}
+v2['tendency_profile'] = obj({
+    'rule_version': {'const': 'behavior-tendency.v1'}, 'basis': {'const': 'model_review'},
+    'model': NAME, 'source_batch_sha256': HASH, 'review_input_sha256': HASH,
+    'axes': {'type': 'array', 'minItems': 6, 'maxItems': 6, 'items': obj({
+        'id': {'enum': list(TENDENCY_AXES)},
+        'value': {'type': ['integer', 'null'], 'minimum': 0, 'maximum': 100},
+        'samples': arr(obj({
+            'run_id': ID, 'item_id': ID,
+            'task_family': {'enum': sorted(set(TENDENCY_FAMILIES.values()))},
+            'level': {'type': 'integer', 'minimum': 0, 'maximum': 4},
+            'reason': {'type': 'string', 'minLength': 1, 'maxLength': 2000},
+            'evidence': {'type': 'array', 'minItems': 1, 'maxItems': 20, 'items': obj({
+                'source': {'enum': list(TENDENCY_SOURCES)},
+                'quote': {'type': 'string', 'minLength': 1, 'maxLength': 20000},
+            })},
+        })),
+    })},
+})
 SCHEMA = {'oneOf': [V1_SCHEMA, V2_SCHEMA]}
 
 
@@ -173,6 +206,80 @@ def _validate(value, schema, path):
 def _unique(values, name):
     if len(set(values)) != len(values):
         raise ValueError(f"{name}: duplicate identifier")
+
+
+def tendency_value(samples):
+    """Repeat means -> item means within family -> equally weighted families.
+
+    Fractions make half-up rounding independent of order and floating point.
+    A missing sample is unknown, never a zero-level observation.
+    """
+    if not samples:
+        return None
+    items = {}
+    for sample in samples:
+        items.setdefault((sample['task_family'], sample['item_id']), []).append(sample['level'])
+    families = {}
+    for (family, _item), levels in items.items():
+        families.setdefault(family, []).append(Fraction(sum(levels), len(levels)))
+    mean = sum(sum(values) / len(values) for values in families.values()) / len(families)
+    scaled = mean * 25 + Fraction(1, 2)
+    return scaled.numerator // scaled.denominator
+
+
+def validate_tendency_profile(report):
+    if 'tendency_profile' not in report:
+        return
+    tendency = report['tendency_profile']
+    _validate(tendency, v2['tendency_profile'], 'tendency_profile')
+    if report['schema_version'] != 'harness-profile.v2':
+        raise ValueError('tendency_profile requires a prospective report')
+    if not tendency['model'].strip():
+        raise ValueError('tendency reviewer model must not be empty')
+    # A source digest binds the review; format alone cannot prove the underlying
+    # files or quotes. The backend separately verifies their exact bytes.
+    if any(not re.fullmatch(r'[a-f0-9]{64}', tendency[key])
+           for key in ('source_batch_sha256', 'review_input_sha256')):
+        raise ValueError('tendency review binding must contain complete digests')
+    axes = tendency['axes']
+    _unique([axis['id'] for axis in axes], 'tendency axes')
+    if set(axis['id'] for axis in axes) != set(TENDENCY_AXES):
+        raise ValueError('tendency profile requires exactly six axes')
+    if report.get('visual_evidence', {}).get('mode') == 'mock' and any(axis['samples'] for axis in axes):
+        raise ValueError('mock runs cannot carry measured behavior tendencies')
+    for axis in axes:
+        _unique([sample['run_id'] for sample in axis['samples']], 'tendency samples')
+        for sample in axis['samples']:
+            item = sample['item_id']
+            if item not in TENDENCY_AXES[axis['id']]:
+                raise ValueError('tendency axis does not support this item')
+            if TENDENCY_FAMILIES[item] != sample['task_family']:
+                raise ValueError('tendency item and task family disagree')
+            if axis['id'] in ('autonomous', 'staging') and sample['level'] not in (0, 2, 4):
+                raise ValueError('tendency sample uses an unsupported ordinal anchor')
+            source = report['provenance'].get(sample['run_id'])
+            if not source or source.get('item_id') != item:
+                raise ValueError('tendency sample is not bound to its run and item')
+            if not sample['reason'].strip():
+                raise ValueError('tendency sample needs a nonempty reason')
+            sources = {evidence['source'] for evidence in sample['evidence']}
+            needs_answer = (axis['id'] in ('verbosity', 'grounding', 'dissent')
+                            or axis['id'] in ('autonomous', 'staging') and sample['level'] < 4)
+            if needs_answer and 'answer' not in sources:
+                raise ValueError('tendency anchor requires public answer evidence')
+            if axis['id'] == 'verification' and sample['level'] > 0 and 'session' not in sources:
+                raise ValueError('verification requires public execution evidence')
+            if (axis['id'] in ('autonomous', 'staging') and sample['level'] == 4
+                    and not sources.intersection(('session', 'grader'))):
+                raise ValueError('action anchor requires execution or artifact evidence')
+            for evidence in sample['evidence']:
+                if not evidence['quote'].strip():
+                    raise ValueError('tendency evidence quote must not be empty')
+                digest = source.get(TENDENCY_SOURCES[evidence['source']])
+                if not isinstance(digest, str) or not re.fullmatch(r'[a-f0-9]{64}', digest):
+                    raise ValueError('tendency evidence is missing its source digest')
+        if axis['value'] != tendency_value(axis['samples']):
+            raise ValueError('tendency value does not match its family-balanced samples')
 
 
 def validate_report(report):
@@ -252,4 +359,5 @@ def validate_report(report):
             if record.get('grade_path') is not None and not record['grade_path'].strip():
                 raise ValueError('grader path must not be empty')
     _portrait.validate_visual_evidence(report)
+    validate_tendency_profile(report)
     return report
