@@ -19,8 +19,8 @@ def catalogue(project, name):
     frozen = bundle_loader()(root)
     items = []
     for item in frozen['items']:
-        meta = json.loads((root / item['metadata_path']).read_text())
-        prompt = (root / item['prompt_path']).read_text()
+        meta = json.loads((root / item['metadata_path']).read_text(encoding='utf-8'))
+        prompt = (root / item['prompt_path']).read_text(encoding='utf-8')
         items.append({
             'id': item['id'], 'dimensions': item['dimensions'], 'protocol': item['protocol'],
             'origin': 'inherited_v1' if item['id'].startswith('V1-') else 'new_v2',

@@ -94,7 +94,7 @@ def probe(run_root=None, protected_paths=None, *, backend="sandbox-exec", timeou
             folder = audit_root / role
             folder.mkdir()
             marker = folder / "sentinel.txt"
-            marker.write_text("controlled non-secret sentinel\n")
+            marker.write_text("controlled non-secret sentinel\n", encoding='utf-8')
             protected.append({"role": role, "path": str(marker), "root": str(folder),
                               "kind": "controlled_sentinel"})
         for i, path in enumerate(protected_paths or []):
@@ -109,12 +109,12 @@ def probe(run_root=None, protected_paths=None, *, backend="sandbox-exec", timeou
                               "kind": "original_open_without_content_read"})
         sentinel = "copy-readable-local-probe"
         own_read = probe_dir / "allowed.txt"
-        own_read.write_text(sentinel)
+        own_read.write_text(sentinel, encoding='utf-8')
         escape = probe_dir / "escape-link"
         escape.symlink_to(protected[0]["path"])
         policy = sandbox_policy(active, [p["root"] for p in protected])
         policy_path = audit_root / "policy.sb"
-        policy_path.write_text(policy)
+        policy_path.write_text(policy, encoding='utf-8')
         result.update(policy_sha256=digest_bytes(policy.encode()), policy=policy,
                       run_root=str(active), protected_paths=protected,
                       environment_keys=sorted(clean_env(active)))
@@ -124,7 +124,7 @@ def probe(run_root=None, protected_paths=None, *, backend="sandbox-exec", timeou
         proc = subprocess.run(["/usr/bin/sandbox-exec", "-f", str(policy_path),
                                str(Path(sys.executable).resolve()), "-B", "-c", PROBE, json.dumps(spec)],
                               cwd=active, env=clean_env(active), capture_output=True,
-                              text=True, timeout=timeout)
+                              text=True, timeout=timeout, encoding='utf-8')
         result.update(returncode=proc.returncode, stderr=proc.stderr[:2000])
         if proc.returncode != 0:
             raise IsolationError(f"sandbox probe did not execute successfully (exit {proc.returncode})")

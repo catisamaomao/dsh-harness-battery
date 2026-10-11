@@ -65,9 +65,33 @@ class RuntimeTests(unittest.TestCase):
 
     def test_cli_plan_requires_explicit_mode(self):
         proc = subprocess.run([sys.executable, '-B', str(ROOT/'runtime/bin/plugin_cli.py'),
-            'plan', '--data-dir', str(self.data)], capture_output=True, text=True)
+            'plan', '--data-dir', str(self.data)], capture_output=True, text=True, encoding='utf-8')
         self.assertNotEqual(proc.returncode, 0)
         self.assertFalse(self.data.exists())
+
+    def test_catalogue_and_plan_ignore_legacy_default_file_encoding(self):
+        original_open = Path.open
+        def legacy_open(path, mode='r', buffering=-1, encoding=None, errors=None, newline=None):
+            if 'b' not in mode and encoding in (None, 'locale'):
+                encoding = 'cp1252'
+            return original_open(path, mode, buffering, encoding, errors, newline)
+        with patch.object(Path, 'open', legacy_open):
+            result = catalogue(plugin_cli.RUNTIME, 'extended')
+            self.assertEqual(result['item_count'], 23)
+            plan = self.plan()
+            saved = assessment.load_plan(plan['plan_path'])
+            self.assertIn('鲸相', saved['label'])
+        self.assertIn('鲸相', Path(plan['plan_path']).read_bytes().decode('utf-8'))
+
+    def test_cli_emits_utf8_despite_legacy_stdio_environment(self):
+        env = {**os.environ, 'PYTHONUTF8':'0', 'PYTHONIOENCODING':'cp1252'}
+        proc = subprocess.run([sys.executable, '-B', str(ROOT/'runtime/bin/plugin_cli.py'),
+            'catalogue', '--battery', 'extended'], capture_output=True, env=env)
+        self.assertEqual(proc.returncode, 0, proc.stderr.decode('utf-8', errors='replace'))
+        result = json.loads(proc.stdout.decode('utf-8'))
+        self.assertEqual(result['item_count'], 23)
+        self.assertEqual(result['items'], catalogue(plugin_cli.RUNTIME, 'extended')['items'])
+        self.assertTrue(any(ord(char) > 127 for char in result['items'][0]['prompt']))
 
     def test_invalid_budget_cannot_read_memory(self):
         with patch('memorix_snapshot.freeze_snapshot', side_effect=AssertionError('memory read')):
@@ -80,7 +104,7 @@ class RuntimeTests(unittest.TestCase):
             copied.append(destination)
             destination.mkdir(parents=True)
             (destination/'memorix.db').write_bytes(b'fake test fixture')
-            (destination/'.project-aliases.json').write_text('{}')
+            (destination/'.project-aliases.json').write_text('{}', encoding='utf-8')
             return {'status':'frozen', 'model_started':False}
         with patch('memorix_snapshot.freeze_snapshot', side_effect=fake_snapshot), \
              patch('plugin_cli.status', return_value={'can_run':True}):
@@ -113,7 +137,7 @@ class RuntimeTests(unittest.TestCase):
         from dsh_adapter import validate_app_path
         app = Path(self.temp.name)/'Example.app'
         (app/'Contents/MacOS').mkdir(parents=True)
-        (app/'Contents/MacOS/DeepSeek Harness').write_text('test fixture')
+        (app/'Contents/MacOS/DeepSeek Harness').write_text('test fixture', encoding='utf-8')
         self.assertEqual(validate_app_path(app), app.resolve())
         with patch('dsh_adapter.SOURCE', app/'plugin/bin'):
             with self.assertRaisesRegex(ValueError, 'overlaps protected'):
@@ -142,7 +166,7 @@ class RuntimeTests(unittest.TestCase):
         folder = Path(result['plan_path']).parent
         with patch('dsh_adapter.run_item', side_effect=AssertionError('adapter started')):
             path = assessment.run_batch(result['plan_path'], cancelled=lambda: True)
-        self.assertEqual(json.loads(path.read_text())['status'], 'cancelled')
+        self.assertEqual(json.loads(path.read_text(encoding='utf-8'))['status'], 'cancelled')
         report = plugin_cli.make_report(folder)
         self.assertEqual(report['included_runs'], 0)
         self.assertTrue(Path(report['report_html']).is_file())
@@ -156,11 +180,11 @@ class RuntimeTests(unittest.TestCase):
                 'item_id':item,'condition_id':condition,'status':'failed',
                 'model_started':False,'mock':True,'subject':'isolated-headless',
                 'termination_reason':'user_cancelled'})
-            (output/'partial.txt').write_text('preserved partial output')
+            (output/'partial.txt').write_text('preserved partial output', encoding='utf-8')
             raise KeyboardInterrupt
         with contextlib.redirect_stdout(io.StringIO()):
             path = assessment.run_batch(result['plan_path'], adapter=interrupted)
-        manifest = json.loads(path.read_text())
+        manifest = json.loads(path.read_text(encoding='utf-8'))
         self.assertEqual(manifest['status'], 'cancelled')
         self.assertEqual(len(manifest['runs']), 1)
         self.assertEqual(len(manifest['not_started_slots']), 1)
@@ -182,7 +206,7 @@ class RuntimeTests(unittest.TestCase):
         commands = [['catalogue','--battery','extended'], ['plan','--data-dir',str(self.data),
                     '--battery','core','--mode','mock','--items','V1-D3-wifi']]
         for command in commands:
-            proc = subprocess.run([sys.executable,'-B',str(cli),*command], capture_output=True, text=True)
+            proc = subprocess.run([sys.executable,'-B',str(cli),*command], capture_output=True, text=True, encoding='utf-8')
             self.assertEqual(proc.returncode, 0, proc.stdout+proc.stderr)
             self.assertEqual(json.loads(proc.stdout)['type'], 'result')
         after = {str(p.relative_to(copied)):p.stat().st_mtime_ns for p in copied.rglob('*') if p.is_file()}
@@ -193,14 +217,14 @@ class RuntimeTests(unittest.TestCase):
         folder = Path(result['plan_path']).parent
         assessment.run_batch(result['plan_path'], cancelled=lambda: True)
         protected = Path(self.temp.name)/'protected.txt'
-        protected.write_text('unchanged')
+        protected.write_text('unchanged', encoding='utf-8')
         try:
             (folder/'report.json').symlink_to(protected)
         except OSError:
             self.skipTest('symlink creation is unavailable on this host')
         with self.assertRaisesRegex(ValueError, 'symlink'):
             plugin_cli.make_report(folder)
-        self.assertEqual(protected.read_text(), 'unchanged')
+        self.assertEqual(protected.read_text(encoding='utf-8'), 'unchanged')
 
     @unittest.skipUnless(os.name == 'posix', 'POSIX flock behavior')
     def test_global_run_lock_blocks_a_second_batch(self):
@@ -231,7 +255,7 @@ class RuntimeTests(unittest.TestCase):
         while not marker.exists() and time.monotonic()<deadline:
             time.sleep(0.05)
         self.assertTrue(marker.exists())
-        pid=int(marker.read_text())
+        pid=int(marker.read_text(encoding='utf-8'))
         worker.send_signal(signal.SIGTERM)
         _, stderr = worker.communicate(timeout=10)
         # Grandchildren inherit the capture pipe: communicate cannot finish if

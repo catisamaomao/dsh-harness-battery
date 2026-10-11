@@ -75,10 +75,10 @@ def consistent_backup(source_data,target_data,active_root):
         policy+='(allow file-read* file-map-executable (subpath '+json.dumps(str(sqlite_lib.resolve()))+'))\n'
     policy+='(allow file-read* (subpath '+json.dumps(str(source_data))+'))\n'
     policy+='(deny file-write* (subpath '+json.dumps(str(source_data))+'))\n'
-    policy_path=Path(active_root)/'backup.sb';policy_path.write_text(policy)
+    policy_path=Path(active_root)/'backup.sb';policy_path.write_text(policy, encoding='utf-8')
     result=subprocess.run(['/usr/bin/sandbox-exec','-f',str(policy_path),str(Path(sys.executable).resolve()),
                           '-B','-c',BACKUP_WORKER,str(db),str(target_data/'memorix.db')],
-                         cwd=active_root,env=clean_env(active_root),capture_output=True,text=True,timeout=60)
+                         cwd=active_root,env=clean_env(active_root),capture_output=True,text=True,timeout=60, encoding='utf-8')
     if result.returncode:
         raise ValueError('read-only SQLite backup failed; source details withheld')
     evidence=json.loads(result.stdout)
@@ -112,7 +112,7 @@ def dependency_closure(modules_root):
         if package in found:continue
         if package.is_symlink() or not package.resolve().is_relative_to(modules_root):
             raise ValueError('runtime package root escapes installed node_modules')
-        manifest=json.loads(regular(package/'package.json').read_text())
+        manifest=json.loads(regular(package/'package.json').read_text(encoding='utf-8'))
         found[package]=manifest
         optional=set(manifest.get('optionalDependencies',{}));omitted.update(optional)
         dependencies=dict(manifest.get('dependencies',{}))
@@ -149,7 +149,7 @@ def copy_runtime(modules_root,target_modules):
 
 
 def remap_namespace(data,workspace,source_workspace):
-    aliases_path=Path(data)/'.project-aliases.json';aliases=json.loads(aliases_path.read_text())
+    aliases_path=Path(data)/'.project-aliases.json';aliases=json.loads(aliases_path.read_text(encoding='utf-8'))
     if aliases.get('version')!=1:raise ValueError('unsupported project alias version')
     groups=aliases.get('groups',[])
     matches=[group for group in groups if str(Path(source_workspace).resolve()) in group.get('rootPaths',[])]
@@ -162,7 +162,7 @@ def remap_namespace(data,workspace,source_workspace):
     # Keep the canonical ID but remove original absolute roots from the runtime's aliases.
     for g in groups:g['rootPaths']=[str(Path(workspace).resolve())] if g is group else []
     if local_alias not in group['aliases']:group['aliases'].append(local_alias)
-    aliases_path.write_text(json.dumps(aliases,ensure_ascii=False,indent=2)+'\n')
+    aliases_path.write_text(json.dumps(aliases,ensure_ascii=False,indent=2)+'\n', encoding='utf-8')
     with sqlite3.connect('file:'+str(Path(data)/'memorix.db')+'?mode=ro',uri=True) as db:
         tables={row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         counts={}
@@ -190,7 +190,7 @@ def freeze_snapshot(output_dir,*,source_data=DEFAULT_DATA,source_workspace=None)
         output.chmod(0o700)
         for path in output.iterdir():path.chmod(0o600)
     source_workspace=Path(source_workspace or Path.home()/'.dsh/memory-workspace').resolve()
-    aliases=json.loads((output/'.project-aliases.json').read_text())
+    aliases=json.loads((output/'.project-aliases.json').read_text(encoding='utf-8'))
     groups=[g for g in aliases.get('groups',[]) if str(source_workspace) in g.get('rootPaths',[])]
     if len(groups)!=1:raise ValueError('frozen source workspace has no unique namespace')
     with sqlite3.connect((output/'memorix.db').as_uri()+'?mode=ro',uri=True) as db:
@@ -237,7 +237,7 @@ def prepare_memorix(active_root,*,source_data=DEFAULT_DATA,modules_root=DEFAULT_
                  'all external networking denied by OS sandbox',
                  'MCP maintenance and write tools can only update disposable snapshot',
                  'project alias root mapped to isolated memory-workspace with same canonical namespace']}
-    (runtime/'snapshot.json').write_text(json.dumps(evidence,ensure_ascii=False,indent=2)+'\n')
+    (runtime/'snapshot.json').write_text(json.dumps(evidence,ensure_ascii=False,indent=2)+'\n', encoding='utf-8')
     return evidence
 
 
@@ -287,7 +287,7 @@ class McpClient:
 def verify_retrieval(snapshot):
     root=Path(snapshot['runtime_root']);data=Path(snapshot['data_dir'])
     policy=sandbox_policy(root,[SOURCE.parent,Path.home()/'.dsh',snapshot['source_data']])
-    policy_path=root/'mcp.sb';policy_path.write_text(policy)
+    policy_path=root/'mcp.sb';policy_path.write_text(policy, encoding='utf-8')
     before=file_state(snapshot['source_data']);runtime_before=inventory(data)['sha256']
     client=McpClient(snapshot,policy_path)
     try:
@@ -329,7 +329,7 @@ def verify_retrieval(snapshot):
     evidence['original_files_unchanged_observed']=before==after
     evidence['runtime_data_before_sha256']=runtime_before
     evidence['runtime_data_after_sha256']=inventory(data)['sha256']
-    (root/'retrieval-evidence.json').write_text(json.dumps(evidence,ensure_ascii=False,indent=2)+'\n')
+    (root/'retrieval-evidence.json').write_text(json.dumps(evidence,ensure_ascii=False,indent=2)+'\n', encoding='utf-8')
     return evidence
 
 

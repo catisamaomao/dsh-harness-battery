@@ -70,7 +70,7 @@ def frozen_baseline(fixture, bundle_sha, item_id, cache_root):
                       "baseline_workspace_sha256": inventory(workspace)["sha256"],
                       "git_content_sha256": inventory(workspace / ".git")["sha256"],
                       "git_revision": git(workspace, "rev-parse", "HEAD")}
-            (stage / "baseline.json").write_text(json.dumps(record, sort_keys=True))
+            (stage / "baseline.json").write_text(json.dumps(record, sort_keys=True), encoding='utf-8')
             try:
                 stage.rename(target)
             except OSError:
@@ -79,7 +79,7 @@ def frozen_baseline(fixture, bundle_sha, item_id, cache_root):
         finally:
             if stage.exists():
                 shutil.rmtree(stage)
-    record = json.loads((target / "baseline.json").read_text())
+    record = json.loads((target / "baseline.json").read_text(encoding='utf-8'))
     workspace = target / "workspace"
     if (record.get("fixture_sha256") != source["sha256"] or record.get("bundle_sha256") != bundle_sha
             or record.get("item_id") != item_id

@@ -91,7 +91,7 @@ def ensure_run_dirs(root):
 
 def git(root, *args):
     proc = subprocess.run(["/usr/bin/git", *args], cwd=root, env=clean_env(Path(root).parent),
-                          capture_output=True, text=True, timeout=30)
+                          capture_output=True, text=True, timeout=30, encoding='utf-8')
     if proc.returncode:
         raise IsolationError(f"git {args[0]} failed ({proc.returncode}): {proc.stderr.strip()[:500]}")
     return proc.stdout.strip()

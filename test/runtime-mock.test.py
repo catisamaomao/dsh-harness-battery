@@ -24,7 +24,7 @@ class InstalledMockTests(unittest.TestCase):
         self.cli=ROOT/'runtime/bin/plugin_cli.py'
 
     def cli_call(self,*args):
-        process=subprocess.run([sys.executable,'-B',str(self.cli),*args],capture_output=True,text=True,timeout=180)
+        process=subprocess.run([sys.executable,'-B',str(self.cli),*args],capture_output=True,text=True,timeout=180, encoding='utf-8')
         self.assertEqual(process.returncode,0,process.stdout+process.stderr)
         return json.loads(process.stdout.splitlines()[-1])
 
@@ -34,9 +34,9 @@ class InstalledMockTests(unittest.TestCase):
         run=self.cli_call('run','--data-dir',str(self.data),'--batch-id',plan['batch_id'],'--mode','mock')
         self.assertEqual(run['status'],'completed')
         self.assertFalse(run['model_started'])
-        batch=json.loads(Path(run['batch_path']).read_text())
+        batch=json.loads(Path(run['batch_path']).read_text(encoding='utf-8'))
         folder=Path(run['batch_path']).parent
-        grade=json.loads((folder/batch['runs'][0]['paths']['grade']).read_text())
+        grade=json.loads((folder/batch['runs'][0]['paths']['grade']).read_text(encoding='utf-8'))
         self.assertEqual(grade['artifact_status'],'pass')
         self.assertEqual(grade['execution_boundary']['network'],'denied')
         self.assertTrue(all(row['condition_id']=='baseline' for row in batch['runs']))
@@ -52,10 +52,10 @@ class InstalledMockTests(unittest.TestCase):
             mock_command='sleep 60 >/dev/null 2>&1 & echo $! > mock-background.pid')
         self.assertEqual(result['status'],'completed',result.get('error'))
         self.assertFalse(result['model_started'])
-        pid=(Path(result['workspace_path'])/'mock-background.pid').read_text().strip()
+        pid=(Path(result['workspace_path'])/'mock-background.pid').read_text(encoding='utf-8').strip()
         deadline=time.monotonic()+5
         while time.monotonic()<deadline:
-            probe=subprocess.run(['/bin/ps','-o','stat=','-p',pid],capture_output=True,text=True)
+            probe=subprocess.run(['/bin/ps','-o','stat=','-p',pid],capture_output=True,text=True, encoding='utf-8')
             if not probe.stdout.strip() or probe.stdout.strip().startswith('Z'):break
             time.sleep(.05)
         self.assertTrue(not probe.stdout.strip() or probe.stdout.strip().startswith('Z'),probe.stdout)
@@ -89,10 +89,10 @@ finally:stop.set();thread.join(timeout=1)
 '''
         process=subprocess.run([sys.executable,'-B','-c',child,str(ROOT/'runtime/bin'),
                  str(ROOT/'runtime/batteries/extended-v2'),str(output),str(pid_path)],
-                 capture_output=True,text=True,timeout=30)
+                 capture_output=True,text=True,timeout=30, encoding='utf-8')
         self.assertEqual(process.returncode,0,process.stderr)
         self.assertTrue(pid_path.is_file(),'mock tool did not reach its cancellation barrier')
-        meta=json.loads((output/'meta.json').read_text())
+        meta=json.loads((output/'meta.json').read_text(encoding='utf-8'))
         self.assertEqual(meta['termination_reason'],'user_cancelled')
         self.assertTrue(meta['cancelled'])
         self.assertFalse(meta['model_started'])
@@ -101,7 +101,7 @@ finally:stop.set();thread.join(timeout=1)
         self.assertTrue((output/'request-audit.json').is_file())
         deadline=time.monotonic()+5
         while time.monotonic()<deadline:
-            probe=subprocess.run(['/bin/ps','-o','stat=','-p',pid_path.read_text().strip()],capture_output=True,text=True)
+            probe=subprocess.run(['/bin/ps','-o','stat=','-p',pid_path.read_text(encoding='utf-8').strip()],capture_output=True,text=True, encoding='utf-8')
             if not probe.stdout.strip() or probe.stdout.strip().startswith('Z'):break
             time.sleep(.05)
         self.assertTrue(not probe.stdout.strip() or probe.stdout.strip().startswith('Z'),probe.stdout)

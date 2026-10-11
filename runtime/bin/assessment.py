@@ -26,7 +26,7 @@ def sha(path):
 def save(path, payload):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     temp=path.with_suffix(path.suffix+'.tmp')
-    temp.write_text(json.dumps(payload,ensure_ascii=False,indent=2)+'\n')
+    temp.write_text(json.dumps(payload,ensure_ascii=False,indent=2)+'\n', encoding='utf-8')
     temp.replace(path)
 
 
@@ -86,15 +86,15 @@ def create_plan(output_dir, *, bundle_dir=None, items=None, condition='project_r
     if memory is not None:
         destination.chmod(0o700)
     save(destination/'plan.json',plan)
-    (destination/'plan.sha256').write_text(sha(destination/'plan.json')+'\n')
+    (destination/'plan.sha256').write_text(sha(destination/'plan.json')+'\n', encoding='utf-8')
     return destination/'plan.json'
 
 
 def load_plan(path):
     path=Path(path).resolve()
-    if sha(path)!=path.with_name('plan.sha256').read_text().strip():
+    if sha(path)!=path.with_name('plan.sha256').read_text(encoding='utf-8').strip():
         raise ValueError('frozen run plan changed; create a new batch rather than rewriting it')
-    plan=json.loads(path.read_text())
+    plan=json.loads(path.read_text(encoding='utf-8'))
     if plan.get('schema_version')!='harness-assessment-plan.v1' or not plan.get('schedule'):
         raise ValueError('unsupported or empty run plan')
     bundle_loader()(Path(plan['bundle_path']),plan['bundle_sha256'])
@@ -119,9 +119,9 @@ def collect_record(batch_root, run_dir, job, result, grade=None):
     if result.get('censored') is True:
         status='failed'
     if status=='completed' and (result.get('exit_code')!=0 or not (run_dir/'answer.txt').is_file()
-                                or not (run_dir/'answer.txt').read_text().strip()):
+                                or not (run_dir/'answer.txt').read_text(encoding='utf-8').strip()):
         status='failed'
-    execution_status = json.loads((run_dir/'meta.json').read_text()).get('status') if (run_dir/'meta.json').is_file() else None
+    execution_status = json.loads((run_dir/'meta.json').read_text(encoding='utf-8')).get('status') if (run_dir/'meta.json').is_file() else None
     return {'run_id':result.get('run_id') or job['slot_id'],'slot_id':job['slot_id'],
         'item_id':job['item_id'],'condition_id':job['condition_id'],'repetition':job['repetition'],
         'status':status,'execution_status':execution_status,'paths':paths,'sha256':hashes,
@@ -175,7 +175,7 @@ def run_batch(plan_path, *, adapter=None, grader=None, progress=None, cancelled=
                     'error':'User cancelled; partial evidence is retained.',
                     'model_started':False,'subject':plan['subject_expectation']}
             if (run_dir/'meta.json').is_file():
-                existing=json.loads((run_dir/'meta.json').read_text())
+                existing=json.loads((run_dir/'meta.json').read_text(encoding='utf-8'))
                 result.update(model_started=existing.get('model_started',False),run_id=existing.get('run_id'),
                               conditions=existing.get('conditions',{}),candidate_sha256=existing.get('candidate_sha256'),
                               subject=existing.get('subject',plan['subject_expectation']))
@@ -185,7 +185,7 @@ def run_batch(plan_path, *, adapter=None, grader=None, progress=None, cancelled=
         except (OSError,ValueError,KeyError,RuntimeError) as exc:
             result={'status':'blocked','error':str(exc),'model_started':False,'subject':plan['subject_expectation']}
             if (run_dir/'meta.json').is_file():
-                existing=json.loads((run_dir/'meta.json').read_text())
+                existing=json.loads((run_dir/'meta.json').read_text(encoding='utf-8'))
                 result.update(model_started=existing.get('model_started',False),run_id=existing.get('run_id'),
                               conditions=existing.get('conditions',{}),candidate_sha256=existing.get('candidate_sha256'),
                               subject=existing.get('subject',plan['subject_expectation']))
@@ -234,7 +234,7 @@ def main(argv=None):
                 memory_snapshot=args.memory_snapshot)
             print(output);return 0
         output=run_batch(args.plan);print(output)
-        return 0 if json.loads(output.read_text())['status']=='completed' else 2
+        return 0 if json.loads(output.read_text(encoding='utf-8'))['status']=='completed' else 2
     except (OSError,ValueError,ImportError) as error:
         print('assessment: '+str(error),file=sys.stderr);return 2
 

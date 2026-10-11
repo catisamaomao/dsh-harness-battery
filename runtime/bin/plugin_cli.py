@@ -135,7 +135,7 @@ def make_plan(args):
 
 def repair_moved_plan(folder):
     """Do not silently rewrite frozen plans after moving an installed plugin."""
-    plan = json.loads((folder/'plan.json').read_text())
+    plan = json.loads((folder/'plan.json').read_text(encoding='utf-8'))
     expected = plan.get('bundle_path')
     if not expected or not Path(expected).is_dir():
         raise ValueError('this plan belongs to a moved installation; create a new plan (saved reports remain readable)')
@@ -146,7 +146,7 @@ def make_report(folder):
         if (folder/name).is_symlink():
             raise ValueError('report output must not follow a symlink')
     from assessment_report import build_report, render_markdown
-    plan = json.loads((folder/'plan.json').read_text())
+    plan = json.loads((folder/'plan.json').read_text(encoding='utf-8'))
     # A saved run can use the current identical bundle after moving the installation.
     bundle = next((battery_path(RUNTIME, name) for name in BATTERIES
                    if catalogue(RUNTIME, name)['bundle_sha256'] == plan.get('bundle_sha256')), None)
@@ -215,7 +215,7 @@ def _run_locked(args):
         # Handles a signal between run slots or during manifest persistence.
         manifest_path = folder/'batch.json'
         if manifest_path.exists():
-            manifest = json.loads(manifest_path.read_text())
+            manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
             manifest.update(status='cancelled', finished_at=assessment.now(),
                 not_started_slots=[j['slot_id'] for j in plan['schedule'][len(manifest['runs']):]])
             assessment.save(manifest_path, manifest)
@@ -227,7 +227,7 @@ def _run_locked(args):
         for kind, handler in previous.items():
             signal.signal(kind, handler)
         assessment.save(folder/'runner.json', {'pid':os.getpid(), 'status':'stopped', 'batch_id':args.batch_id})
-    manifest = json.loads((folder/'batch.json').read_text())
+    manifest = json.loads((folder/'batch.json').read_text(encoding='utf-8'))
     return {'status':manifest['status'], 'ok':manifest['status']=='completed', 'batch_id':args.batch_id,
             'batch_path':str(folder/'batch.json'), 'mode':plan['mode'],
             'completed_runs':sum(r['status']=='completed' for r in manifest['runs']),
@@ -255,6 +255,11 @@ def run(args):
 
 
 def main(argv=None):
+    # JSONL is always UTF-8, including pipes on Windows with legacy code pages.
+    # Embedded callers may provide StringIO instead of a reconfigurable stream.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(encoding='utf-8')
     os.umask(0o077)
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest='command', required=True)

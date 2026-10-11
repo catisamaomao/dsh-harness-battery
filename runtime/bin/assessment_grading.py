@@ -30,12 +30,12 @@ def grade_item(bundle_dir, item_id, workspace, expected_bundle_sha256):
         protected = [Path(__file__).resolve().parents[1], Path.home()/'.dsh', workspace]
         policy = sandbox_policy(active, protected)
         policy += '(allow file-read* (subpath '+json.dumps(str(isolated_bundle))+'))\n'
-        policy_path = root/'grade.sb'; policy_path.write_text(policy)
+        policy_path = root/'grade.sb'; policy_path.write_text(policy, encoding='utf-8')
         command = ['/usr/bin/sandbox-exec','-f',str(policy_path),str(Path(sys.executable).resolve()),'-B',
                    str(isolated_bundle/'graders/grade.py'),'--item',item_id,'--workspace',str(candidate),
                    '--expected-bundle-sha256',expected_bundle_sha256]
         try:
-            proc = run_child(command,cwd=active,env=clean_env(active),capture_output=True,text=True,timeout=60)
+            proc = run_child(command,cwd=active,env=clean_env(active),capture_output=True,text=True,timeout=60, encoding='utf-8')
         except subprocess.TimeoutExpired as error:
             raise ValueError('independent grader timed out; no artifact result established') from error
         if proc.returncode not in (0,1):

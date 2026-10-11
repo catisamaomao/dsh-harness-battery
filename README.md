@@ -25,7 +25,9 @@ dsh plugin --profile desktop add ./dsh-harness-battery-0.1.0.tgz
   plugin --profile desktop add ./dsh-harness-battery-0.1.0.tgz
 ```
 
-重新打开 Harness，点击侧栏“鲸相”。插件已经包含运行代码，无安装构建脚本，也无需 npm 账号或 npm 全局安装。
+重新打开 Harness，在插件管理页确认“鲸相”已启用，再点击侧栏“鲸相”。插件已经包含运行代码，无安装构建脚本，也无需 npm 账号或 npm 全局安装。
+
+在本机 `0.2.0-rc.2` 验收时，宿主的 pnpm 曾显示安装完成后仍未退出，导致自动启用没有执行。遇到这种情况，应先确认该安装进程已停止，再在插件管理页检查已安装列表并手动启用；仅看到下载或 `Done` 日志还不代表插件可用。
 
 ## 使用
 

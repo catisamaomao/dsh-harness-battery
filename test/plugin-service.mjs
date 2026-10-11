@@ -61,7 +61,11 @@ test('one bounded run, fixed args, no shell, private durable history and report 
   const run = (await service.state()).runs[0]; assert.equal(run.status, 'completed'); assert.equal(run.hasReport, true); assert.equal(run.budget.maxProviderRequests, 690);
   assert.match((await service.report(started.id)).toString(), /鲸相报告/);
   assert.deepEqual(calls.map(call => call.args[2]), ['plan', 'run', 'report']);
-  for (const call of calls) assert.equal(call.options.shell, false);
+  for (const call of calls) {
+    assert.equal(call.options.shell, false);
+    assert.equal(call.options.env.PYTHONUTF8, '1');
+    assert.equal(call.options.env.PYTHONIOENCODING, 'utf-8');
+  }
   assert.ok(calls[1].args.includes('--allow-live')); assert.ok(!calls[0].args.includes('--include-memory'));
   if (process.platform !== 'win32') {
     assert.equal((await fs.stat(service.dataDir)).mode & 0o777, 0o700);
@@ -82,7 +86,7 @@ test('restart requests cancellation for the saved active batch and never resumes
   const { service, calls, runtime } = await setup(t); await service.start({ battery: 'core', includeMemory: false }); await until(() => !service.active);
   const saved = JSON.parse(await fs.readFile(path.join(service.dataDir, 'history.json'), 'utf8')); saved[0].status = 'running';
   await fs.writeFile(path.join(service.dataDir, 'history.json'), JSON.stringify(saved)); const previous = calls.length;
-  const restored = new BatteryService({ runtime, dataDir: service.dataDir, python: 'mock', spawnProcess: service.spawnProcess }); await restored.ready;
+  const restored = new BatteryService({ runtime, dataDir: service.dataDir, platform: 'darwin', python: 'mock', spawnProcess: service.spawnProcess }); await restored.ready;
   assert.deepEqual(calls.slice(previous).map(call => call.args[2]), ['cancel']); assert.equal((await restored.state()).runs[0].status, 'interrupted');
   assert.equal(restored.active, null); restored.close();
 });
