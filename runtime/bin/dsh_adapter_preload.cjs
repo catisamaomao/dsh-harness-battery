@@ -12,9 +12,13 @@ delete process.env.NODE_OPTIONS;
 const ChildProcess = require('node:child_process').ChildProcess;
 const originalSpawn = ChildProcess.prototype.spawn;
 ChildProcess.prototype.spawn = function(options) {
-  const result = originalSpawn.call(this, options);
+  // Keep a verified launcher alive until the host has captured its descendants.
+  // Both gates are resumed only after birth/ancestry checks by the host monitor.
+  const gate = 'kill -STOP "$$"; "$@"; rc=$?; kill -STOP "$$"; exit "$rc"';
+  const wrapped = {...options, file:'/bin/sh', args:['/bin/sh','-c',gate,'harness-worker',options.file,...options.args.slice(1)]};
+  const result = originalSpawn.call(this, wrapped);
   if (this.pid) {
-    const frame = Buffer.from(JSON.stringify({type:'worker_started',pid:this.pid,detached:options.detached===true})+'\n');
+    const frame = Buffer.from(JSON.stringify({type:'worker_started',pid:this.pid,detached:options.detached===true,gated:true})+'\n');
     for (let offset=0; offset<frame.length;) offset+=fs.writeSync(outputFd,frame,offset,frame.length-offset);
   }
   return result;

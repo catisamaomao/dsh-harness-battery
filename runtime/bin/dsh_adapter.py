@@ -25,7 +25,7 @@ import uuid
 import audit_injection
 from isolation_support import clean_env, digest_bytes, inventory, sandbox_policy
 from validation_run import prepare
-from process_control import run_child, kill_tree, kill_registered_worker
+from process_control import run_child, kill_tree, bind_process, WorkerRegistry
 
 APP = Path(os.environ.get('DSH_HARNESS_APP', '/Applications/DeepSeek Harness.app')).expanduser().resolve()
 ELECTRON = APP / 'Contents/MacOS/DeepSeek Harness'
@@ -88,7 +88,7 @@ if not result.wasSuccessful():sys.exit(1)
 print(json.dumps({"python_executable":sys.executable,"python_version":sys.version.split()[0],"modules":["csv","decimal","json","unittest"],"unittest_probe_passed":True}))
 '''
     checked=run_child(['/usr/bin/sandbox-exec','-f',str(policyfile),'python3','-B','-c',code],
-                           cwd=workspace,env=env,capture_output=True,text=True,timeout=15)
+                           cwd=workspace,env=env,capture_output=True,text=True,timeout=15, encoding='utf-8')
     if checked.returncode:raise ValueError('sandboxed Python/unittest runtime preflight failed')
     return json.loads(checked.stdout)
 
@@ -109,7 +109,7 @@ process.stdout.write(JSON.stringify({token:g.payload.token})); }catch{process.ex
     proc = subprocess.run([str(ELECTRON), '--expose-internals', '-e', script,
                            str(MODULES / 'yaml'), str(path)],
                           env={'PATH': '/usr/bin:/bin', 'ELECTRON_RUN_AS_NODE': '1'},
-                          capture_output=True, text=True, timeout=15)
+                          capture_output=True, text=True, timeout=15, encoding='utf-8')
     if proc.returncode:
         raise ValueError('host provider credential unavailable; no credential details were logged')
     try:
@@ -149,8 +149,8 @@ class ProviderBridge:
         self.mock_tool = mock_tool
         self.audit, self.calls, self.conn = [], 0, None
         self.stopped = threading.Event()
-        self.workers = {}
-        self.worker_lock = threading.RLock()
+        self.workers = None
+        self.cleanup_result = None
 
     def dispatch(self, message):
         if not isinstance(message, dict):
@@ -237,22 +237,31 @@ class ProviderBridge:
         except (BrokenPipeError,OSError):
             pass
 
+    def bind_worker_root(self, process):
+        self.workers=WorkerRegistry(bind_process(process))
+
     def register_worker(self, message):
-        pid, detached = message.get('pid'), message.get('detached')
-        if type(pid) is not int or pid <= 1 or pid == os.getpid() or type(detached) is not bool:
+        pid,detached,gated=message.get('pid'),message.get('detached'),message.get('gated',False)
+        if type(pid) is not int or pid<=1 or pid==os.getpid() or type(detached) is not bool or type(gated) is not bool:
             raise ValueError('invalid child-worker registration')
-        with self.worker_lock:
-            if len(self.workers) >= 2048:
-                raise ValueError('child-worker registry budget exceeded')
-            self.workers[pid] = detached
+        if self.workers is None:
+            raise ValueError('worker root identity has not been established')
+        self.workers.register(pid,detached,gated=gated,resume=not self.stopped.is_set())
         if self.stopped.is_set():
-            kill_registered_worker(pid,detached)
+            self.kill_workers()
+
+    def monitor_workers(self):
+        while not self.stopped.wait(0.01):
+            try:
+                self.workers.refresh()
+            except (ValueError,RuntimeError,OSError):
+                self.audit.append({'worker_tracking':'incomplete','reason':'descendant identity refresh unavailable'})
+                return
 
     def kill_workers(self):
-        with self.worker_lock:
-            workers=list(self.workers.items())
-        for pid,detached in reversed(workers):
-            kill_registered_worker(pid,detached)
+        if self.workers is not None:
+            self.cleanup_result=self.workers.cleanup()
+        return self.cleanup_result
 
     def stop(self):
         self.stopped.set()
@@ -376,7 +385,7 @@ def run_item(bundle_dir,item_id,condition_id,output_dir,*,max_requests=8,max_out
             raise ValueError('invalid execution mode or wall-clock budget')
         validate_app_path(APP)
         prep = prepare(bundle_dir,item_id,condition_id,memory_snapshot=memory_snapshot)
-        (out/'preparation.json').write_text(json.dumps(prep,ensure_ascii=False,indent=2)+'\n')
+        (out/'preparation.json').write_text(json.dumps(prep,ensure_ascii=False,indent=2)+'\n', encoding='utf-8')
         if prep['status']!='prepared':raise ValueError(prep.get('blocked_reason','preparation failed'))
         active = Path(prep['active_root']); control = Path(prep['run_dir'])/'control'; workspace=Path(prep['workspace_path'])
         result.update(workspace_path=str(workspace),run_dir=prep['run_dir'],bundle_sha256=prep['bundle_sha256'])
@@ -391,7 +400,7 @@ def run_item(bundle_dir,item_id,condition_id,output_dir,*,max_requests=8,max_out
             result['configuration_differences'][1]='external web and non-Memorix MCP/plugins, title inference, telemetry and subagents disabled'
             result['configuration_differences'].extend(memory_runtime['differences'])
             memory_runtime['runtime_start_sha256']=inventory(Path(memory_runtime['data_dir']))['sha256']
-            (out/'memory-runtime.json').write_text(json.dumps(memory_runtime,ensure_ascii=False,indent=2)+'\n')
+            (out/'memory-runtime.json').write_text(json.dumps(memory_runtime,ensure_ascii=False,indent=2)+'\n', encoding='utf-8')
             runtime_root=Path(memory_runtime['runtime_root'])
             for name in ('snapshot.json','backup.sb'):
                 if (runtime_root/name).exists():shutil.move(runtime_root/name,control/('memory-'+name))
@@ -399,10 +408,10 @@ def run_item(bundle_dir,item_id,condition_id,output_dir,*,max_requests=8,max_out
                 'serverName':'memorix','transport':'stdio','command':memory_runtime['command'][0],
                 'args':memory_runtime['command'][1:],'env':memory_runtime['env'],'cwd':memory_runtime['workspace'],
                 'failOnStartupError':True,'toolCallTimeoutMs':30000,'reconnect':{'enabled':False}}}]})
-        patchfile.write_text(json.dumps(rows))
+        patchfile.write_text(json.dumps(rows), encoding='utf-8')
         protected = [SOURCE.parent, control, Path.home()/'.dsh']
         policy = adapter_policy(active,protected)
-        policyfile=control/'adapter.sb';policyfile.write_text(policy)
+        policyfile=control/'adapter.sb';policyfile.write_text(policy, encoding='utf-8')
         env=clean_env(active)
         env['PATH']=str(Path(sys.executable).resolve().parent)+os.pathsep+env['PATH']
         env.update(ELECTRON_RUN_AS_NODE='1',DSH_BRIDGE_DUMMY_KEY='bridge-placeholder-not-a-secret',
@@ -426,7 +435,17 @@ def run_item(bundle_dir,item_id,condition_id,output_dir,*,max_requests=8,max_out
         proc=subprocess.Popen(command+['--json','--','-'],cwd=workspace,env=env,
                 stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
                 pass_fds=(child_read,child_write),start_new_session=True)
+        try:
+            bridge.bind_worker_root(proc)
+        except BaseException:
+            # Popen still owns this unreaped child; no prompt has been sent.
+            proc.kill()
+            proc.communicate(timeout=5)
+            os.close(parent_read);os.close(parent_write)
+            os.close(child_read);os.close(child_write)
+            raise
         os.close(child_read);os.close(child_write)
+        monitor=threading.Thread(target=bridge.monitor_workers,daemon=True);monitor.start()
         thread=threading.Thread(target=bridge.serve,args=(parent_read,parent_write),daemon=True);thread.start()
         timed_out=False
         try:
@@ -444,20 +463,19 @@ def run_item(bundle_dir,item_id,condition_id,output_dir,*,max_requests=8,max_out
         finally:
             # Cancellation and parsing failures must never leave a live inference/tool tree.
             bridge.stop()
+            monitor.join(timeout=2)
             try:kill_tree(proc)
             except ProcessLookupError:pass
             if proc.poll() is None:proc.communicate(timeout=5)
             bridge.kill_workers()
             thread.join(timeout=2)
             bridge.kill_workers()
-        result['worker_cleanup']={'registered_workers':len(bridge.workers),
-                                  'scope':'registered child groups and observed descendant trees',
-                                  'completed':True}
+        result['worker_cleanup']=bridge.cleanup_result
         result.update(exit_code=proc.returncode,elapsed_seconds=round(time.monotonic()-started,3),
                       model_started=mode=='live' and bridge.calls>0,provider_requests=bridge.calls)
         if timed_out:result['status']='timeout'
         (out/'events.jsonl').write_bytes(stdout);(out/'stderr.txt').write_bytes(stderr)
-        (out/'request-audit.json').write_text(json.dumps(bridge.audit,ensure_ascii=False,indent=2)+'\n')
+        (out/'request-audit.json').write_text(json.dumps(bridge.audit,ensure_ascii=False,indent=2)+'\n', encoding='utf-8')
         events=[json.loads(line) for line in stdout.decode().splitlines() if line.strip()]
         termination=native_termination(events)
         if termination:result.update(termination_reason=termination,censored=True)
@@ -471,8 +489,8 @@ def run_item(bundle_dir,item_id,condition_id,output_dir,*,max_requests=8,max_out
         if audit['status']!='ok' or audit.get('observed_prompt_sha256')!=digest_bytes(prompt):
             raise ValueError('authoritative session prompt does not match the frozen item')
         records,tool_events=public_session(raw)
-        (out/'session.jsonl').write_text(''.join(json.dumps(e,ensure_ascii=False)+'\n' for e in records))
-        (out/'public-tools.jsonl').write_text(''.join(json.dumps(e,ensure_ascii=False)+'\n' for e in tool_events))
+        (out/'session.jsonl').write_text(''.join(json.dumps(e,ensure_ascii=False)+'\n' for e in records), encoding='utf-8')
+        (out/'public-tools.jsonl').write_text(''.join(json.dumps(e,ensure_ascii=False)+'\n' for e in tool_events), encoding='utf-8')
         logs=sorted(session_dirs[0].glob('session.v*.jsonl.zstd'),key=lambda p:int(p.name.split('.')[1][1:]))
         shutil.copyfile(logs[-1],out/'session.raw.jsonl.zstd')
         answer=answers[-1].strip() if answers else ''
@@ -480,7 +498,7 @@ def run_item(bundle_dir,item_id,condition_id,output_dir,*,max_requests=8,max_out
                         for e in records if e.get('type')=='assistant/message']
         public_answers=[a for a in public_answers if a]
         if answer and (not public_answers or public_answers[-1]!=answer):raise ValueError('public answer differs from authoritative session')
-        (out/'answer.txt').write_text(answer)
+        (out/'answer.txt').write_text(answer, encoding='utf-8')
         actual_rules=actual_instruction_evidence(raw,prep['condition_file_sha256'],audit)
         result.update(answer=answer,prompt_sha256=digest_bytes(prompt),candidate_sha256=candidate_digest(workspace),
                       workspace_inventory_sha256=inventory(workspace)['sha256'],tool_events_complete=True,
@@ -521,7 +539,8 @@ def run_item(bundle_dir,item_id,condition_id,output_dir,*,max_requests=8,max_out
         if bridge:
             bridge.stop()
             result.update(model_started=mode=='live' and bridge.calls>0,provider_requests=bridge.calls)
-            (out/'request-audit.json').write_text(json.dumps(bridge.audit,ensure_ascii=False,indent=2)+'\n')
+            if bridge.cleanup_result is not None:result['worker_cleanup']=bridge.cleanup_result
+            (out/'request-audit.json').write_text(json.dumps(bridge.audit,ensure_ascii=False,indent=2)+'\n', encoding='utf-8')
         if result['status']=='timeout':result['termination_reason']='wall_clock_budget_exhausted';result['censored']=True
         elif bridge and any(row.get('rejected') and 'request budget exhausted' in row.get('reason','') for row in bridge.audit):
             result['termination_reason']='request_budget_exhausted';result['censored']=True
@@ -531,7 +550,7 @@ def run_item(bundle_dir,item_id,condition_id,output_dir,*,max_requests=8,max_out
                          ('memory_runtime','memory-runtime.json')]:
             if (out/name).exists():result['paths'][key]=name;result['sha256'][key]=digest_bytes((out/name).read_bytes())
         result['paths']['meta']='meta.json'
-        (out/'meta.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
+        (out/'meta.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n', encoding='utf-8')
     return result
 
 
