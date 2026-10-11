@@ -1,6 +1,6 @@
 {
   "name": "dsh-harness-battery",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "鲸相 — isolated behavioral assessments and evidence-backed whale profile reports for DeepSeek Harness.",
   "type": "module",
   "main": "./index.js",

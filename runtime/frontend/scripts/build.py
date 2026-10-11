@@ -2,14 +2,13 @@
 import argparse
 import base64
 import json
-import math
 from pathlib import Path
 import re
 
 from report_validation import MAX_REPORT_BYTES, SCHEMA, validate_report
 
 ROOT = Path(__file__).resolve().parents[1]
-AXES = ["主动推进", "核验投入", "探索广度", "协作密度", "表达详略", "范围扩展"]
+
 
 
 def safe_json(value):
@@ -27,15 +26,8 @@ def read_report(path):
 
 def build(report_path, output_dir=None):
     report, raw = read_report(report_path)
-    demo = json.loads((ROOT / "data/profile.example.json").read_text(encoding="utf-8"))
-    if demo.get("schemaVersion") != 1 or demo.get("source") != "demonstration-only" or demo.get("axes") != AXES:
-        raise ValueError("Unsupported six-axis demonstration data")
-    values = demo.get("values")
-    if not isinstance(values, list) or len(values) != 6 or not all(
-            type(v) in (int, float) and math.isfinite(v) and 0 <= v <= 100 for v in values):
-        raise ValueError("Demo requires six finite values from 0 to 100")
     fragment = (ROOT / "src/profile-panel.html").read_text(encoding="utf-8")
-    substitutions = {"__PROFILE_VALUES__": safe_json(values), "__REPORT_JSON__": safe_json(report),
+    substitutions = {"__REPORT_JSON__": safe_json(report),
                      "__REPORT_SCHEMA__": safe_json(SCHEMA)}
     for key in ("explorer", "observer", "collaborator"):
         encoded = base64.b64encode((ROOT / "assets/illustrations" / f"{key}.jpg").read_bytes()).decode("ascii")

@@ -5,7 +5,6 @@
   const core = window.HarnessReport;
   const schema = JSON.parse(q('#profile-schema-data').textContent);
   const source = q('#profile-source-data').textContent;
-  const defaults = JSON.parse(q('#profile-demo-data').textContent);
   const artSources = JSON.parse(q('#profile-art-data').textContent);
   const make = (tag, text, className) => {
     const node = document.createElement(tag);
@@ -23,22 +22,22 @@
     automatic_evidence_observation: '自动提取的事实观察 · 未经人工复核', heuristic_candidate: '自动提取的候选线索 · 等待人工复核' };
   const injectionNames = { observed: '观测到注入', none_observed: '未观测到注入', unknown: '注入状态未知' };
   const retrievalNames = { observed: '观测到成功检索', not_observed: '未观测到成功检索', unknown: '轨迹不足或未记录' };
-  const samples = [
-    { key: 'explorer', name: '逐浪', vector: [82,54,90,34,42,76], alt: '逐浪：鲸鱼娘跨步前进，一手握罗盘，另一手指向远方。' },
-    { key: 'observer', name: '观潮', vector: [38,92,44,30,72,25], alt: '观潮：鲸鱼娘单膝俯身，用放大镜检视证据板。' },
-    { key: 'collaborator', name: '合流', vector: [58,58,60,92,64,48], alt: '合流：鲸鱼娘坐在共享绘图桌旁，向观看者递出画笔。' }
-  ];
-  const axes = [
-    { name:'主动推进', low:'等待明确指令', high:'主动提出下一步' },
-    { name:'核验投入', low:'较少复核', high:'多步核验' },
-    { name:'探索广度', low:'沿既定路径', high:'比较多种路径' },
-    { name:'协作密度', low:'独立推进', high:'频繁对齐' },
-    { name:'表达详略', low:'简短直接', high:'展开说明' },
-    { name:'范围扩展', low:'聚焦当前任务', high:'拓展关联任务' }
-  ];
+  const themes = {
+    explorer: {name:'逐浪', seal:'行', subtitle:'乘流而进',
+      poem:['前路横潮未系舟','且将可渡付中流','一帆先送星河近','留待东风再上楼'],
+      alt:'逐浪：鲸鱼娘跨步前进，握着罗盘指向远方。'},
+    observer: {name:'观潮', seal:'察', subtitle:'照水知微',
+      poem:['浪底微光入眼明','俯身重辨水中星','莫凭一叶言沧海','几度观澜几度听'],
+      alt:'观潮：鲸鱼娘单膝俯身，用放大镜检视证据板。'},
+    collaborator: {name:'合流', seal:'应', subtitle:'随约成章',
+      poem:['一纸相期共展图','收帆扬棹各知途','潮来有约同舟渡','落笔成章不越隅'],
+      alt:'合流：鲸鱼娘坐在共享绘图桌旁，向观看者递出画笔。'},
+    pending: {name:'未定之相', seal:'待', subtitle:'潮声未定',
+      poem:['鲸影初临雾未开','半笺潮迹待风来','且留六角星光白','莫把微澜作性裁']}
+  };
   let state;
-  try { state = core.createState(source, schema, defaults); }
-  catch (error) { q('[data-error]').hidden = false; q('[data-error]').textContent = '内置报告校验失败：' + error.message; q('[data-settings]').open = true; return; }
+  try { state = core.createState(source, schema); }
+  catch (error) { q('[data-error]').hidden = false; q('[data-error]').textContent = '内置报告校验失败：' + error.message; q('[data-report-source]').open = true; return; }
   const announce = text => { q('[data-announcement]').textContent = text; };
   const showError = text => { q('[data-error]').textContent = text; q('[data-error]').hidden = !text; };
   function evidenceNode(observation) {
@@ -72,10 +71,6 @@
     node.append(conditions); return node;
   }
   function renderReport() {
-    q('[data-profile-name]').textContent = state.report.profile;
-    q('[data-report-review-note]').textContent = state.report.schema_version === 'harness-profile.v2' ?
-      '当前结果由自动规则整理。事实观察和待复核线索分别展示；尚未经人工复核，也未证明记忆养成效果。' :
-      '当前是人工复核后的局部描述性观察，尚未证明记忆养成效果。';
     const observations = new Map(state.report.observations.map(o => [o.id, o]));
     const dimensions = [];
     [...state.report.dimensions].sort((a,b) => a.id.localeCompare(b.id)).forEach(dimension => {
@@ -108,72 +103,35 @@
       '以上是资料清单，不是每个维度的样本数。',
       '题面不一致的记录 ID：\n' + state.report.prompt_mismatches.map(x => x.run_id).join('\n')].join('\n');
   }
-  const grade = value => value >= 80 ? 'A' : value >= 60 ? 'B' : value >= 40 ? 'C' : value >= 20 ? 'D' : 'E';
-  const svgNode = (tag, attrs, text) => {
-    const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
-    Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, String(value)));
-    if (text !== undefined) node.textContent = text; return node;
-  };
-  function demoArt() {
-    const weights = [3,3,3,3,.5,1];
-    return [...samples].sort((a,b) => {
-      const distance = sample => sample.vector.reduce((total,v,i) => total + weights[i] * (state.demo.values[i]-v)**2,0);
-      return distance(a)-distance(b);
-    })[0];
-  }
   function renderArt() {
-    const sample = state.mode === 'report' ? samples.find(s => s.key === state.cover) : demoArt();
-    q('[data-art]').src = artSources[sample.key]; q('[data-art]').alt = sample.alt;
-    q('[data-art-caption]').textContent = (state.mode === 'report' ? '自选封面 · ' : '形象演示 · ') + sample.name;
-    q('[data-demo-name]').textContent = sample.name;
+    const key = core.portrait(state.report);
+    const theme = themes[key || 'pending'];
+    q('[data-profile-name]').textContent = theme.name;
+    q('[data-subtitle]').textContent = theme.subtitle;
+    q('[data-seal]').textContent = theme.seal;
+    q('[data-poem]').replaceChildren(...theme.poem.map(line => make('p', line)));
+    q('[data-art]').hidden = !key;
+    q('[data-empty-art]').hidden = Boolean(key);
+    if (key) { q('[data-art]').src = artSources[key]; q('[data-art]').alt = theme.alt; }
+    else { q('[data-art]').removeAttribute('src'); q('[data-art]').alt = ''; }
+    q('[data-stage]').dataset.theme = key || 'pending';
+    const names = ['授权与范围','核验行动','表达形态','证据取用','异议回应','组织与汇报'];
+    const statuses = {observed:'有事实观察',partial:'部分证据或待复核',unknown:'暂无证据'};
+    const points = core.constellation(state.report);
+    points.forEach((point,i) => {
+      const vertex = q('[data-vertex="'+i+'"]');
+      vertex.dataset.status = point.status;
+      vertex.querySelector('title').textContent = names[i]+'：'+statuses[point.status];
+    });
+    q('#star-description').textContent = points.map((point,i) => names[i]+'：'+statuses[point.status]).join('；')+'。六个顶点固定位置，仅显示证据状态，不表示性格强弱或分数。';
+    q('[data-theme-rule]').textContent = key ? '本次立绘依据已绑定的行为记录自动呈现。逐浪对应受阻任务中的部分交付；合流对应通知任务两种授权下的交付适配；观潮对应任务中的实际核验。一次具备完整证据的场景即可触发逐浪或观潮；合流须具备授权配对。多种表现同时满足时依此顺序展示，评诗是文学题辞，不是心理测量结论。' : '本次证据尚不足以呈现特定立绘。旧版报告、模拟记录或未达到展示条件的结果均保留未定之相，不使用演示参数补齐。';
   }
-  function drawDemo() {
-    if (state.mode !== 'demo') return;
-    const values = state.demo.values;
-    const width = Math.max(220, q('[data-radar]').getBoundingClientRect().width);
-    const radius = width/2 - 64, y = radius + 61, height = radius*2+122;
-    const points = v => v.map((n,i) => { const angle = -Math.PI/2 + i*Math.PI/3; return [width/2+Math.cos(angle)*radius*n/100,y+Math.sin(angle)*radius*n/100]; });
-    const pointString = v => points(v).map(pair => pair.join(',')).join(' ');
-    const svg = q('[data-radar]'); svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height); svg.style.height = height + 'px';
-    const grid = [];
-    for (let n=1;n<=5;n++) grid.push(svgNode('polygon',{points:pointString(Array(6).fill(n*20)),class:'radar-grid'}));
-    points(Array(6).fill(100)).forEach(([x,endY]) => grid.push(svgNode('line',{x1:width/2,y1:y,x2:x,y2:endY,class:'radar-grid'})));
-    q('[data-grid]').replaceChildren(...grid); q('[data-polygon]').setAttribute('points', pointString(values));
-    const locations = [[width/2,y-radius-43,'middle'],[width-2,y-radius*.5-12,'end'],[width-2,y+radius*.5+13,'end'],[width/2,y+radius+27,'middle'],[2,y+radius*.5+13,'start'],[2,y-radius*.5-12,'start']];
-    const labels = [];
-    axes.forEach((axis,i) => {const [x,cy,anchor]=locations[i]; labels.push(svgNode('text',{x,y:cy,'text-anchor':anchor},axis.name),svgNode('text',{x,y:cy+25,'text-anchor':anchor,class:'grade'},grade(values[i])));});
-    q('[data-radar-labels]').replaceChildren(...labels);
-    q('#radar-description').textContent = '演示参数，非实际测评。' + axes.map((axis,i) => axis.name + ' ' + values[i] + '，' + grade(values[i])).join('；');
-    axes.forEach((axis,i) => {q('#demo-value-'+i).textContent = values[i] + ' · ' + grade(values[i]);});
-  }
-  function setMode(mode) {
-    state.mode = mode;
-    q('[data-report-panel]').hidden = mode !== 'report'; q('[data-demo-panel]').hidden = mode !== 'demo';
-    q('[data-report-source]').hidden = mode !== 'report';
-    root.querySelectorAll('[data-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
-    renderArt(); drawDemo();
-  }
-  axes.forEach((axis,i) => {
-    const row = make('div'); const head = make('div', undefined, 'input-head');
-    const label = make('label', axis.name); label.htmlFor='demo-axis-'+i;
-    const output=make('output');output.id='demo-value-'+i;output.htmlFor='demo-axis-'+i;head.append(label,output);
-    const input=make('input');input.type='range';input.id='demo-axis-'+i;input.min='0';input.max='100';input.step='1';input.value=state.demo.values[i];
-    const ends=make('div',undefined,'ends');ends.append(make('span',axis.low),make('span',axis.high));
-    input.addEventListener('input',() => {const values=[...state.demo.values];values[i]=Number(input.value);core.setDemoValues(state,values);drawDemo();renderArt();});
-    row.append(head,input,ends);q('[data-sliders]').append(row);
-  });
-  samples.forEach(sample => {
-    const button=make('button',sample.name);button.type='button';button.dataset.cover=sample.key;button.setAttribute('aria-pressed',String(sample.key===state.cover));
-    button.addEventListener('click',()=>{state.cover=sample.key;root.querySelectorAll('[data-cover]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.cover===state.cover)));renderArt();announce('报告封面已改为'+sample.name);});
-    q('[data-covers]').append(button);
-  });
-  root.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click',()=>setMode(button.dataset.mode)));
   q('[data-import]').addEventListener('change',async event=>{
     const file=event.target.files[0];if(!file)return;
     try {
       if(file.size>core.maxBytes)throw new Error('报告文件不能超过 2 MB');
       const text=await file.text();core.importReport(state,text,schema,file.name);
-      renderReport();setMode('report');showError('');announce('已导入 '+file.name+'。原报告不会被写回。');
+      renderReport();renderArt();showError('');announce('已导入 '+file.name+'。原报告不会被写回。');
     } catch(error) {showError('导入失败，当前报告保持不变：'+error.message);}
     finally {event.target.value='';}
   });
@@ -182,5 +140,5 @@
     const link=make('a');link.href=url;link.download='harness-profile-source.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
     announce('已导出当前报告的来源 JSON。');
   });
-  renderReport();setMode('report');new ResizeObserver(drawDemo).observe(q('[data-radar]'));
+  renderReport();renderArt();
 })();

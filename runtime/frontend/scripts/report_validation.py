@@ -1,11 +1,17 @@
 """Shared strict v1/v2 schemas and referential checks for the offline report UI."""
 import copy
+import importlib.util
 import math
+from pathlib import Path
 import re
 from datetime import datetime
 
 MAX_REPORT_BYTES = 2_000_000
 DIMENSIONS = [f"D{i}" for i in range(1, 8)]
+_portrait_spec = importlib.util.spec_from_file_location('portrait_signal_validation',
+    Path(__file__).resolve().parents[2] / 'bin/portrait_signals.py')
+_portrait = importlib.util.module_from_spec(_portrait_spec)
+_portrait_spec.loader.exec_module(_portrait)
 
 
 def obj(properties, required=None, additional=False):
@@ -100,8 +106,15 @@ v2condition['properties'].update(
     memory_runtime_status=TEXT_NULL, memory_available=BOOL_NULL,
     memory_retrieval_status={'enum': ['observed', 'not_observed', 'unknown']})
 v2['provenance']['additionalProperties']['properties'].update(
+    item_id=ID,
     grade_path=TEXT_NULL,
     grade_sha256={'type': ['string', 'null'], 'pattern': r'^[a-f0-9]{64}$'})
+v2['visual_evidence'] = obj({
+    'rule_version': {'const': _portrait.RULE_VERSION}, 'mode': {'enum': ['live', 'mock']},
+    'signals': arr(obj({'code': {'enum': list(_portrait.PRIORITY)}, 'item_id': ID,
+        'task_family': {'enum': sorted(set(_portrait.TASK_FAMILIES.values()))}, 'run_id': ID,
+        'observation_ids': {'type': 'array', 'items': ID, 'minItems': 1, 'maxItems': 1}})),
+})
 SCHEMA = {'oneOf': [V1_SCHEMA, V2_SCHEMA]}
 
 
@@ -238,4 +251,5 @@ def validate_report(report):
                 raise ValueError('grader path and hash must be null together')
             if record.get('grade_path') is not None and not record['grade_path'].strip():
                 raise ValueError('grader path must not be empty')
+    _portrait.validate_visual_evidence(report)
     return report

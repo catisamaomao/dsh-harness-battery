@@ -1,12 +1,12 @@
 # 鲸相 · Harness Battery
 
-DeepSeek Harness 的行为画像插件。侧栏打开“鲸相”，选择题包、查看题目、启动独立测试，再阅读左侧证据面板与右侧鲸鱼娘立绘组成的报告。
+DeepSeek Harness 的行为画像插件。侧栏打开“鲸相”，点击开始测试。完成后自动呈现六芒星、鲸鱼娘立绘和一首画像评诗；设置与原始证据收在展开项中。
 
-**首版 v0.1.0 为探索性预览。** 它记录当前受控配置下的公开回答、工具动作和实际产物，帮助观察你的 Harness 如何工作；尚不是经过心理测量标定的性格量表，也不证明这些特征由用户记忆造成。
+**v0.1.1 为探索性预览。** 它记录当前受控配置下的公开回答、工具动作和实际产物，帮助观察你的 Harness 如何工作；尚不是经过心理测量标定的性格量表，也不证明这些特征由用户记忆造成。
 
 ## 安装
 
-从 [GitHub Releases](https://github.com/catisamaomao/dsh-harness-battery/releases) 下载 `dsh-harness-battery-0.1.0.tgz` 和 `SHA256SUMS.txt`。在下载目录核对：
+从 [GitHub Releases](https://github.com/catisamaomao/dsh-harness-battery/releases) 下载 `dsh-harness-battery-0.1.1.tgz` 和 `SHA256SUMS.txt`。在下载目录核对：
 
 ```bash
 shasum -a 256 -c SHA256SUMS.txt
@@ -15,14 +15,14 @@ shasum -a 256 -c SHA256SUMS.txt
 在 Harness 的插件管理页安装本地 `.tgz`。若使用命令行，先完全退出 Harness，再运行：
 
 ```bash
-dsh plugin --profile desktop add ./dsh-harness-battery-0.1.0.tgz
+dsh plugin --profile desktop add ./dsh-harness-battery-0.1.1.tgz
 ```
 
 如果 `dsh` 尚未加入 PATH，macOS 安装包提供以下入口：
 
 ```bash
 "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh" \
-  plugin --profile desktop add ./dsh-harness-battery-0.1.0.tgz
+  plugin --profile desktop add ./dsh-harness-battery-0.1.1.tgz
 ```
 
 重新打开 Harness，在插件管理页确认“鲸相”已启用，再点击侧栏“鲸相”。插件已经包含运行代码，无安装构建脚本，也无需 npm 账号或 npm 全局安装。
@@ -31,11 +31,12 @@ dsh plugin --profile desktop add ./dsh-harness-battery-0.1.0.tgz
 
 ## 使用
 
-1. 点击环境检查。真实测试需要 macOS、DeepSeek Harness 桌面版、Python 3.10+ 和可用的 DeepSeek 登录状态。Python 3.14 之前还需要 `zstd` 命令用于读取会话证据。
-2. 选择 **核心版 9 题**或**扩展版 23 题**，可以先预览题面。扩展版包含原九题和新增十四题，七个维度各新增两题。
-3. 确认请求预算后点击开始。默认每题一次、每题最多 30 次模型请求；核心版最多 270 次、扩展版最多 690 次，实际数量通常较少，会产生 DeepSeek 用量。
-4. 可取消正在运行的测试。完成、取消及失败批次都留在本机历史中，报告会区分已完成、受阻、截断和缺失证据。
-5. 打开报告查看七维观察及原文证据。报告 HTML 可独立离线打开，JSON 导出包含所选报告的证据，请按需要自行保管。
+1. 打开侧栏“鲸相”。插件自动检查环境，默认核心版 9 题，点击 **开始测试** 即可。
+2. 完成后自动打开本次画像。用评诗读其气质，用六芒星看观测状态，立绘按本次已核验行为自动呈现。
+3. 如需调整题包、查看预算或历史，展开 **更多选项与记录**；如需查看原始七维证据或导入导出，展开画像下方 **翻阅此卷**。
+
+真实测试需要 macOS、DeepSeek Harness 桌面版、Python 3.10+ 和可用的 DeepSeek 登录状态。Python 3.14 之前还需要 `zstd`。每题最多 30 次模型请求，核心版最多 270 次、扩展版最多 690 次，会产生 DeepSeek 用量。运行中可取消，已有记录留在本机。
+
 
 **默认不读取你的记忆。** 勾选使用 Memorix 记忆副本后，插件在本地制作私有副本；随后点击开始才允许本次测试将检索到的记忆连同题目、工具结果发送到官方 DeepSeek API。测试中的修改留在每题独立副本，答复、报告和画像标签不写回原记忆或当前对话。
 
@@ -55,7 +56,7 @@ dsh plugin --profile desktop add ./dsh-harness-battery-0.1.0.tgz
 
 [新增题面全文](runtime/batteries/extended-v2/QUESTIONS.md) · [题库覆盖说明](runtime/batteries/extended-v2/README.md)
 
-题库按版本冻结，运行计划绑定 SHA256。产物通过仅说明它符合该题的交付约定；受阻题通过不意味着整体目标已完成。D5/D7 的语义仍需复核，分数和等级保持空值。右侧三张不同姿态的立绘为自选示意封面，六轴形象演示与真实七维报告分开，不用演示数字冒充测试结果。
+题库按版本冻结，运行计划绑定 SHA256。产物通过仅说明它符合该题的交付约定；受阻题通过不意味着整体目标已完成。D5/D7 的语义仍需复核，分数和等级保持空值。三种不同姿态的立绘根据结构化行为证据自动呈现，评诗是文学题辞。证据不足时显示“未定之相”；六芒星只标记证据状态，没有虚构分数或能力等级。详细对应规则见 [画像呈现规则](docs/portrait-rules.md)。
 
 隔离执行模式没有复刻日常 desktop 的全部工具、插件与历史上下文。提供记忆副本也不等于模型实际检索过记忆；报告分别记录服务可用性和公开检索证据。详情见 [数据与运行边界](docs/data-boundaries.md)。
 
@@ -74,7 +75,7 @@ dsh plugin --profile desktop add ./dsh-harness-battery-0.1.0.tgz
 npm test
 npm run check
 npm pack --ignore-scripts
-python3 -B scripts/audit-release.py --tarball dsh-harness-battery-0.1.0.tgz
+python3 -B scripts/audit-release.py --tarball dsh-harness-battery-0.1.1.tgz
 ```
 
 `npm test` 执行离线插件、运行器与发布扫描检查，**不会调用模型或读取真实记忆**。题包的两个冻结摘要也会复核。测试真实调用需要通过页面明确开始。

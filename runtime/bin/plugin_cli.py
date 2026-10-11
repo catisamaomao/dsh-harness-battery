@@ -4,6 +4,7 @@ import sys
 sys.dont_write_bytecode = True
 import argparse
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -13,6 +14,8 @@ import platform
 import re
 import shutil
 import signal
+import stat
+import tempfile
 import threading
 import uuid
 
@@ -141,23 +144,7 @@ def repair_moved_plan(folder):
         raise ValueError('this plan belongs to a moved installation; create a new plan (saved reports remain readable)')
 
 
-def make_report(folder):
-    for name in ('report.json','report.json.tmp','report.md','report.html','frontend'):
-        if (folder/name).is_symlink():
-            raise ValueError('report output must not follow a symlink')
-    from assessment_report import build_report, render_markdown
-    plan = json.loads((folder/'plan.json').read_text(encoding='utf-8'))
-    # A saved run can use the current identical bundle after moving the installation.
-    bundle = next((battery_path(RUNTIME, name) for name in BATTERIES
-                   if catalogue(RUNTIME, name)['bundle_sha256'] == plan.get('bundle_sha256')), None)
-    if bundle is None:
-        raise ValueError('no installed frozen question pack matches this saved batch')
-    report = build_report(folder/'batch.json', bundle_dir=bundle)
-    assessment.save(folder/'report.json', report)
-    md_path = folder/'report.md'
-    if md_path.is_symlink():
-        raise ValueError('report output must not follow a symlink')
-    md_path.write_text(render_markdown(report), encoding='utf-8')
+def build_frontend(report_path, output_dir):
     scripts = RUNTIME/'frontend/scripts'
     sys.path.insert(0, str(scripts))
     try:
@@ -165,9 +152,129 @@ def make_report(folder):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         with contextlib.redirect_stdout(io.StringIO()):
-            module.build(folder/'report.json', folder/'frontend')
+            module.build(report_path, output_dir)
     finally:
         sys.path.remove(str(scripts))
+
+
+def read_saved_file(source, limit=2_000_000):
+    before = source.lstat()
+    if not stat.S_ISREG(before.st_mode) or before.st_size > limit:
+        raise ValueError('saved report must be a regular non-symlink JSON file within 2 MB')
+    flags = os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NONBLOCK', 0)
+    descriptor = os.open(source, flags)
+    with os.fdopen(descriptor, 'rb') as stream:
+        opened = os.fstat(stream.fileno())
+        if not stat.S_ISREG(opened.st_mode) or (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
+            raise ValueError('saved report changed while opening')
+        raw = stream.read(limit+1)
+    if len(raw) > limit:
+        raise ValueError('saved report exceeds 2 MB')
+    return raw
+
+
+def installed_bundle_for_plan(plan):
+    bundle = next((battery_path(RUNTIME, name) for name in BATTERIES
+                   if catalogue(RUNTIME, name)['bundle_sha256'] == plan.get('bundle_sha256')), None)
+    if bundle is None:
+        raise ValueError('no installed frozen question pack matches this saved batch')
+    return bundle
+
+
+def display_report_snapshot(folder, raw):
+    """Optionally derive new observations from existing hash-bound local evidence."""
+    spec = importlib.util.spec_from_file_location('harness_saved_report_validation',
+        RUNTIME/'frontend/scripts/report_validation.py')
+    validator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(validator)
+    original = json.loads(raw)
+    validator.validate_report(original)
+    if original['schema_version'] != 'harness-profile.v2' or 'visual_evidence' in original:
+        return raw, 'not_needed'
+    batch_path, plan_path = folder/'batch.json', folder/'plan.json'
+    available = [p.exists() or p.is_symlink() for p in (batch_path, plan_path)]
+    if not any(available):
+        return raw, 'unavailable_without_batch'
+    if not all(available):
+        raise ValueError('cannot refresh saved visual evidence: batch.json and plan.json are both required')
+    batch_raw, plan_raw = read_saved_file(batch_path), read_saved_file(plan_path)
+    batch, plan = json.loads(batch_raw), json.loads(plan_raw)
+    if (batch.get('plan_path') != 'plan.json'
+            or batch.get('plan_sha256') != hashlib.sha256(plan_raw).hexdigest()
+            or batch.get('batch_id') != folder.name or plan.get('batch_id') != folder.name):
+        raise ValueError('cannot refresh saved visual evidence: batch/plan identity or SHA256 mismatch')
+    from assessment_report import build_report
+    # This reads saved run evidence only. In particular, do not call load_plan(),
+    # whose execution preflight would reopen the original memory snapshot.
+    derived = build_report(batch_path, bundle_dir=installed_bundle_for_plan(plan),
+                           expected_batch_sha256=hashlib.sha256(batch_raw).hexdigest())
+    if original['profile'] != derived['profile'] or any(
+            original['inventory'][key] != derived['inventory'][key]
+            for key in ('total_runs', 'task_runs', 'questionnaire_runs')):
+        raise ValueError('saved report does not belong to the validated batch inventory')
+    for run_id, old in original['provenance'].items():
+        current = derived['provenance'].get(run_id)
+        if current is None or any(old.get(key) != current.get(key) for key in (
+                'meta_sha256', 'events_sha256', 'public_answer_sha256',
+                'session_log_sha256', 'config_dump_sha256', 'grade_sha256')):
+            raise ValueError('saved report provenance differs from the validated batch')
+    derived['limitations'].append(
+        '本页由同批次已校验的保存证据重新整理；原始报告与会话未修改，未重新调用模型或读取用户原始记忆。'
+        f'原报告生成时间：{original["generated_at"]}；原报告 SHA256：{hashlib.sha256(raw).hexdigest()}。')
+    validator.validate_report(derived)
+    updated = json.dumps(derived, ensure_ascii=False, indent=2).encode('utf-8')
+    if len(updated) > 2_000_000:
+        raise ValueError('derived saved report exceeds 2 MB')
+    return updated, 'derived_from_saved_batch'
+
+
+def render_report(folder):
+    """Render saved, validated report data with the installed UI; never rerun it."""
+    folder = Path(folder)
+    if folder.is_symlink() or folder.resolve() != folder.absolute() or not folder.is_dir():
+        raise ValueError('report batch must be a real directory without symlinks')
+    source = folder/'report.json'
+    raw, refresh = display_report_snapshot(folder, read_saved_file(source))
+    view = folder/'view'
+    if view.is_symlink() or (view.exists() and not view.is_dir()):
+        raise ValueError('report view directory must not follow a symlink')
+    view.mkdir(mode=0o700, exist_ok=True)
+    target = view/'index.html'
+    if target.is_symlink() or (target.exists() and not target.is_file()):
+        raise ValueError('report view output must be a regular non-symlink file')
+    with tempfile.TemporaryDirectory(prefix='.render-', dir=view) as staging:
+        stage = Path(staging)
+        snapshot = stage/'report.json'
+        snapshot.write_bytes(raw)
+        # The builder validates the complete schema before writing any HTML.
+        # It receives an isolated copy so a saved-report edit cannot bypass that check.
+        build_frontend(snapshot, stage)
+        page = stage/'index.html'
+        if page.is_symlink() or not page.is_file() or page.stat().st_size > 16*1024*1024:
+            raise ValueError('rendered report is not a bounded regular HTML file')
+        if view.is_symlink() or view.resolve() != view.absolute() or target.is_symlink():
+            raise ValueError('report view path changed while rendering')
+        page.replace(target)
+    return {'status':'ready', 'report_json':str(source), 'report_html':str(target),
+            'visual_evidence_refresh':refresh,
+            'model_started':False, 'credentials_read':False, 'memory_read':False}
+
+
+def make_report(folder):
+    for name in ('report.json','report.json.tmp','report.md','report.html','frontend'):
+        if (folder/name).is_symlink():
+            raise ValueError('report output must not follow a symlink')
+    from assessment_report import build_report, render_markdown
+    plan = json.loads((folder/'plan.json').read_text(encoding='utf-8'))
+    # A saved run can use the current identical bundle after moving the installation.
+    bundle = installed_bundle_for_plan(plan)
+    report = build_report(folder/'batch.json', bundle_dir=bundle)
+    assessment.save(folder/'report.json', report)
+    md_path = folder/'report.md'
+    if md_path.is_symlink():
+        raise ValueError('report output must not follow a symlink')
+    md_path.write_text(render_markdown(report), encoding='utf-8')
+    build_frontend(folder/'report.json', folder/'frontend')
     target = folder/'report.html'
     if target.is_symlink():
         raise ValueError('report output must not follow a symlink')
@@ -278,7 +385,7 @@ def main(argv=None):
     plan.add_argument('--max-requests', type=int, default=30)
     plan.add_argument('--max-output-tokens', type=int, default=16384)
     plan.add_argument('--timeout', type=int, default=600)
-    for name in ('run','report','cancel'):
+    for name in ('run','report','render','cancel'):
         command = sub.add_parser(name)
         command.add_argument('--data-dir', required=True)
         command.add_argument('--batch-id', required=True)
@@ -299,6 +406,8 @@ def main(argv=None):
             folder = batch_folder(private_data_root(args.data_dir), args.batch_id)
             if args.command == 'report':
                 result = {'status':'ready', 'batch_id':args.batch_id, **make_report(folder)}
+            elif args.command == 'render':
+                result = {'batch_id':args.batch_id, **render_report(folder)}
             else:
                 assessment.save(folder/'cancel-requested.json', {'requested_at':assessment.now()})
                 result = {'status':'cancel_requested','batch_id':args.batch_id,'model_started':False}

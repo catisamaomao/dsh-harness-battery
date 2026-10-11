@@ -21,7 +21,12 @@ const childScript = `
    const finish=status=>{emit({ok:status==='completed',status});process.exit(0)};
    process.on('SIGTERM',()=>finish('cancelled'));
    setTimeout(()=>finish(process.env.WHALE_MOCK_STATUS||'completed'),Number(process.env.WHALE_MOCK_DELAY||10));
- } else if(command==='report') {const file=path.join(get('--data-dir'),'batches',batch,'report.html');fs.writeFileSync(file,'<!doctype html><p>鲸相报告</p>');emit({report_html:file});}
+ } else if(command==='report') {const folder=path.join(get('--data-dir'),'batches',batch);const file=path.join(folder,'report.html');fs.writeFileSync(file,'<!doctype html><p>旧版封面</p>');fs.writeFileSync(path.join(folder,'report.json'),JSON.stringify({saved:'原始报告'}));emit({report_html:file});}
+ else if(command==='render') {
+   if(process.env.WHALE_MOCK_RENDER_FAIL==='1'){emit({status:'error'});process.exit(2);}
+   const folder=path.join(get('--data-dir'),'batches',batch,'view');fs.mkdirSync(folder,{recursive:true});
+   const file=path.join(folder,'index.html');fs.writeFileSync(file,'<!doctype html><p>鲸相报告 · 新版</p>');emit({report_html:file});
+ }
  else if(command==='cancel') emit({status:'cancel_requested'});
 `;
 async function setup(t, env = {}) {
@@ -60,7 +65,7 @@ test('one bounded run, fixed args, no shell, private durable history and report 
   await until(() => !service.active);
   const run = (await service.state()).runs[0]; assert.equal(run.status, 'completed'); assert.equal(run.hasReport, true); assert.equal(run.budget.maxProviderRequests, 690);
   assert.match((await service.report(started.id)).toString(), /鲸相报告/);
-  assert.deepEqual(calls.map(call => call.args[2]), ['plan', 'run', 'report']);
+  assert.deepEqual(calls.map(call => call.args[2]), ['plan', 'run', 'report', 'render']);
   for (const call of calls) {
     assert.equal(call.options.shell, false);
     assert.equal(call.options.env.PYTHONUTF8, '1');
@@ -71,6 +76,7 @@ test('one bounded run, fixed args, no shell, private durable history and report 
     assert.equal((await fs.stat(service.dataDir)).mode & 0o777, 0o700);
     assert.equal((await fs.stat(path.join(service.dataDir, 'history.json'))).mode & 0o777, 0o600);
   }
+  await service.writes;
   const restored = new BatteryService({ runtime, dataDir: service.dataDir, python: 'unused' }); await restored.ready;
   assert.equal((await restored.state()).runs[0].id, run.id); assert.equal((await restored.state()).runs[0].hasReport, true); restored.close();
 });
@@ -84,11 +90,51 @@ test('cancel stops the mock child group and retains a partial report without mar
 
 test('restart requests cancellation for the saved active batch and never resumes model work', async t => {
   const { service, calls, runtime } = await setup(t); await service.start({ battery: 'core', includeMemory: false }); await until(() => !service.active);
+  await service.writes;
   const saved = JSON.parse(await fs.readFile(path.join(service.dataDir, 'history.json'), 'utf8')); saved[0].status = 'running';
   await fs.writeFile(path.join(service.dataDir, 'history.json'), JSON.stringify(saved)); const previous = calls.length;
   const restored = new BatteryService({ runtime, dataDir: service.dataDir, platform: 'darwin', python: 'mock', spawnProcess: service.spawnProcess }); await restored.ready;
   assert.deepEqual(calls.slice(previous).map(call => call.args[2]), ['cancel']); assert.equal((await restored.state()).runs[0].status, 'interrupted');
   assert.equal(restored.active, null); restored.close();
+});
+
+test('saved reports render once per service session, preserve sources and rebuild after restart without model work', async t => {
+  const { service, calls, runtime } = await setup(t);
+  const started = await service.start({ battery:'core', includeMemory:false }); await until(() => !service.active); await service.writes;
+  const oldHtml = service.runs[0].reportPath; const source = path.join(path.dirname(oldHtml), 'report.json');
+  const before = await fs.readFile(source); const oldBefore = await fs.readFile(oldHtml); const previous = calls.length;
+  const pages = await Promise.all([service.report(started.id), service.report(started.id)]);
+  assert.ok(pages.every(page => page.toString().includes('新版')));
+  await service.report(started.id);
+  assert.deepEqual(calls.slice(previous).map(call => call.args[2]), ['render']);
+  assert.deepEqual(await fs.readFile(source), before); assert.deepEqual(await fs.readFile(oldHtml), oldBefore);
+  const restored = new BatteryService({ runtime, dataDir:service.dataDir, python:'mock', spawnProcess:service.spawnProcess });
+  try { await restored.ready; await restored.report(started.id); }
+  finally { restored.close(); }
+  assert.deepEqual(calls.slice(previous).map(call => call.args[2]), ['render','render']);
+});
+
+test('failed report rendering is explicit and never falls back to the old cover HTML', async t => {
+  const { service, calls } = await setup(t, { WHALE_MOCK_RENDER_FAIL:'1' });
+  const started = await service.start({ battery:'core', includeMemory:false }); await until(() => !service.active);
+  const oldBefore = await fs.readFile(service.runs[0].reportPath);
+  await assert.rejects(service.report(started.id), /新版报告显示失败，原始记录已保留/);
+  assert.deepEqual(await fs.readFile(service.runs[0].reportPath), oldBefore);
+  assert.equal(calls.at(-1).args[2], 'render');
+});
+
+test('cached reports still reject JSON and rendered HTML symlinks', async t => {
+  const { service, root } = await setup(t);
+  const started = await service.start({ battery:'core', includeMemory:false }); await until(() => !service.active);
+  await service.report(started.id);
+  const batch = path.dirname(service.runs[0].reportPath); const source = path.join(batch,'report.json');
+  const outside = path.join(root,'outside.json'); await fs.writeFile(outside,'host secret');
+  await fs.unlink(source); if (!await symlinkOrSkip(t,outside,source)) return;
+  await assert.rejects(service.report(started.id), /报告路径无效/);
+  await fs.unlink(source); await fs.writeFile(source,JSON.stringify({saved:'原始报告'}));
+  const page=path.join(batch,'view','index.html'); await fs.unlink(page);
+  if (!await symlinkOrSkip(t,outside,page)) return;
+  await assert.rejects(service.report(started.id), /报告路径无效|新版报告显示失败/);
 });
 
 test('stopped_on_failure remains failed and selected memory is passed only to the plan', async t => {
