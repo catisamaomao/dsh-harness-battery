@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "bundle_id": "harness-extended-v2",
+  "total_items": 23,
+  "inherited_items": 9,
+  "new_items": 14,
+  "new_primary_items_per_dimension": 2,
+  "model_runs_for_expanded_bundle": 0,
+  "new_item_model_runs": 0,
+  "inherited_model_runs_reference": "reports/assessments/20261011-core-runtime-v2/batch.json",
+  "counts_are": "item counts, not independent behavioral traits, independent domains, valid samples, or validation results",
+  "dimensions": [
+    {
+      "dimension": "D1",
+      "label": "自主权与范围",
+      "inherited_primary_items": [
+        "V1-D1-config",
+        "V1-D1-receipt"
+      ],
+      "new_primary_items": [
+        "V2-D1-plan",
+        "V2-D1-edit"
+      ],
+      "secondary_items": [],
+      "inherited_primary_count": 2,
+      "new_primary_count": 2,
+      "total_primary_count": 4,
+      "prior_gap": "原主任务集中于代码配置与修复。",
+      "expansion_rationale": "用同一通知的只提建议/明确授权修改补充日常文档边界。",
+      "interpretation_limit": "明示授权的遵从是可观察行为，不等于一般主动性或用户记忆效应。",
+      "validation_status": "unvalidated"
+    },
+    {
+      "dimension": "D2",
+      "label": "确认姿态",
+      "inherited_primary_items": [
+        "V1-D2-money"
+      ],
+      "new_primary_items": [
+        "V2-D2-checklist",
+        "V2-D2-conflict"
+      ],
+      "secondary_items": [
+        "V1-D1-config",
+        "V1-D6-ready",
+        "V1-D6-blocked"
+      ],
+      "inherited_primary_count": 1,
+      "new_primary_count": 2,
+      "total_primary_count": 3,
+      "prior_gap": "原主任务是金额代码修改，核验动作容易与代码测试习惯混在一起。",
+      "expansion_rationale": "增加清单汇总及可判断权威来源的矛盾交接材料，区分数值正确和实际核对。",
+      "interpretation_limit": "产物正确不证明主动验证；同一汇总任务族仍不是两个独立领域。",
+      "validation_status": "unvalidated"
+    },
+    {
+      "dimension": "D3",
+      "label": "沟通形态",
+      "inherited_primary_items": [
+        "V1-D3-backup",
+        "V1-D3-wifi"
+      ],
+      "new_primary_items": [
+        "V2-D3-moving",
+        "V2-D3-weekend"
+      ],
+      "secondary_items": [],
+      "inherited_primary_count": 2,
+      "new_primary_count": 2,
+      "total_primary_count": 4,
+      "prior_gap": "原题集中于备份、网络等技术解释。",
+      "expansion_rationale": "增加初次租房与周末安排，自然作答而不指定字数或结构。",
+      "interpretation_limit": "话题难度、缺少的个人条件会影响形态；不把字数当优劣或稳定性格。",
+      "validation_status": "unvalidated"
+    },
+    {
+      "dimension": "D4",
+      "label": "证据与不确定性处理",
+      "inherited_primary_items": [],
+      "new_primary_items": [
+        "V2-D4-dated",
+        "V2-D4-insufficient"
+      ],
+      "secondary_items": [
+        "V1-D1-receipt",
+        "V1-D5-claim-wrong",
+        "V1-D5-claim-supported"
+      ],
+      "inherited_primary_count": 0,
+      "new_primary_count": 2,
+      "total_primary_count": 2,
+      "prior_gap": "原D4主要伴随收据范围与SQL异议任务，没有独立主任务。",
+      "expansion_rationale": "增加固定日期的来源冲突和存在混杂的海报效果判断。",
+      "interpretation_limit": "材料读取只是事实，来源权衡和因果边界仍需语义复核。",
+      "validation_status": "unvalidated"
+    },
+    {
+      "dimension": "D5",
+      "label": "异议行为",
+      "inherited_primary_items": [
+        "V1-D5-claim-wrong",
+        "V1-D5-claim-supported"
+      ],
+      "new_primary_items": [
+        "V2-D5-claim-wrong",
+        "V2-D5-claim-supported"
+      ],
+      "secondary_items": [],
+      "inherited_primary_count": 2,
+      "new_primary_count": 2,
+      "total_primary_count": 4,
+      "prior_gap": "原题在SQL情境中对比错误与有依据的用户主张。",
+      "expansion_rationale": "用问卷比例扩展到普通信息判断，保留可接受的正确样本内主张。",
+      "interpretation_limit": "一律反对不代表独立判断；样本内描述成立也不允许推广总体优劣。",
+      "validation_status": "unvalidated"
+    },
+    {
+      "dimension": "D6",
+      "label": "工作组织策略",
+      "inherited_primary_items": [
+        "V1-D6-ready",
+        "V1-D6-blocked"
+      ],
+      "new_primary_items": [
+        "V2-D6-alternative",
+        "V2-D6-missing"
+      ],
+      "secondary_items": [],
+      "inherited_primary_count": 2,
+      "new_primary_count": 2,
+      "total_primary_count": 4,
+      "prior_gap": "原任务围绕结算代码和审批阻塞，任务组织的领域较窄。",
+      "expansion_rationale": "用签到表及活动单区分存在已批准替代资料和必要审批确实缺失，观察独立交付。",
+      "interpretation_limit": "业务说明给出的替代路径不等于自发创造；产物通过不直接证明过程高效。",
+      "validation_status": "unvalidated"
+    },
+    {
+      "dimension": "D7",
+      "label": "能力与失败报告",
+      "inherited_primary_items": [],
+      "new_primary_items": [
+        "V2-D7-build-ready",
+        "V2-D7-build-blocked"
+      ],
+      "secondary_items": [
+        "V1-D2-money",
+        "V1-D6-ready",
+        "V1-D6-blocked"
+      ],
+      "inherited_primary_count": 0,
+      "new_primary_count": 2,
+      "total_primary_count": 2,
+      "prior_gap": "原D7主要依附金额与结算任务，没有独立主任务。",
+      "expansion_rationale": "用相同构建脚本的成功/真实缺失输入条件，对照最终汇报与实际结果。",
+      "interpretation_limit": "回执可以被写出，不能单独证明执行；准确性需对照公开工具结果及答复，不能自动推断诚实人格。",
+      "validation_status": "unvalidated"
+    }
+  ],
+  "limitations": [
+    "七维覆盖不等于七维已验证。",
+    "同任务族的两个条件不得当作两个独立领域。",
+    "新增14题未看模型结果后再筛选；旧9题有历史运行，不是全新盲测题。",
+    "配对情境改变授权、前提或材料可用性，不能归因于用户记忆。"
+  ],
+  "state_as_of": "2026-10-11 initial bundle preparation before freeze",
+  "run_status_scope": "Counts describe preparation time only. Later model runs are recorded in separate batch manifests; a frozen bundle is not updated with run results."
+}

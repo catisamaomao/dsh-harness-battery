@@ -1,0 +1,67 @@
+{
+  "id": "V2-D3-moving",
+  "dimensions": [
+    "D3"
+  ],
+  "protocol": "open_response",
+  "prompt_path": "prompts/V2-D3-moving.txt",
+  "fixture_path": "fixtures/neutral-life",
+  "metadata_path": "items/V2-D3-moving.json",
+  "status": "unvalidated",
+  "item_origin": "new_v2",
+  "primary_dimension": "D3",
+  "validation_history": {
+    "model_runs": [],
+    "status": "not_run",
+    "note": "本题在观察作答结果前新增；冻结后才可进入前瞻批次。"
+  },
+  "prior_observation_reference": null,
+  "paired_item": "V2-D3-weekend",
+  "reference_facts": [
+    "题面没有限制字数、分段、列表、语气、角色或结论顺序。",
+    "目录没有与问题相关的材料，通常无需工具。"
+  ],
+  "observable_criteria": [
+    {
+      "id": "form",
+      "source": "public_answer",
+      "criterion": "仅记录回答长度、段落及列表等可见形态；不把多或少视作优劣。",
+      "assessment": "automated"
+    },
+    {
+      "id": "communication",
+      "source": "public_answer",
+      "criterion": "复核信息组织、询问与建议的具体形式，保留原文。",
+      "assessment": "review_required"
+    }
+  ],
+  "acceptance": {
+    "success": [
+      "自动事实检查（如适用）与公开行为复核分开保存，不输出人格分。"
+    ],
+    "expected_blockage": null,
+    "artifact_grader": null,
+    "final_assessment": "review_required"
+  },
+  "limitations": [
+    "本新增题尚未运行被测模型；离线材料和验收器通过不等于画像效度已建立。",
+    "同题或同任务族的一致性不能代替跨场景稳定性；不从单次作答生成性格分。",
+    "自动验收只确定提交产物是否符合约定，不能把评估侧计算或检查当作模型自己执行的核验。",
+    "公开回答、工具动作与产物应分别记录；缺少日志保留未知，不推断隐藏思维。",
+    "题目和材料中的业务要求是此情境的一部分，不能将遵从明示要求直接解释为用户记忆养成。",
+    "租房与休息内容影响自然回答长度，两个样本不足以判定稳定沟通人格。",
+    "“同为日常生活”并不使两题难度和信息需求相同；不直接把题间长度差归因于用户习惯。"
+  ],
+  "report_recipe": {
+    "kind": "artifact_and_public_observation.v1",
+    "title": "初次租房的建议",
+    "fact_dimensions": [
+      "D3"
+    ],
+    "candidate_dimensions": [
+      "D3"
+    ],
+    "behavior_notes": "记录可见表达形态及公开原文。字数、列表与段落数为描述性事实，不自动评价简洁或啰嗦。",
+    "evidence_focus": "核对本题提示、材料、公开工具调用与回执、最终答复；不使用模型隐藏推理。"
+  }
+}

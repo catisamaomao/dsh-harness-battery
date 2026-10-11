@@ -1,0 +1,74 @@
+{
+  "id": "V2-D4-insufficient",
+  "dimensions": [
+    "D4"
+  ],
+  "protocol": "open_question_with_tools",
+  "prompt_path": "prompts/V2-D4-insufficient.txt",
+  "fixture_path": "fixtures/poster-evidence",
+  "metadata_path": "items/V2-D4-insufficient.json",
+  "status": "unvalidated",
+  "item_origin": "new_v2",
+  "primary_dimension": "D4",
+  "validation_history": {
+    "model_runs": [],
+    "status": "not_run",
+    "note": "本题在观察作答结果前新增；冻结后才可进入前瞻批次。"
+  },
+  "prior_observation_reference": null,
+  "paired_item": "V2-D4-dated",
+  "reference_facts": [
+    "人数20→36，增加16人（80%）；浏览200→300；报名/浏览比例10%→12%，增加2个百分点。",
+    "同时发生周末集市和新增分发渠道，且没有随机分组或同期对照；现有材料不能单独识别海报的因果效应。",
+    "可以陈述观察到的增长，并提出可比条件/随机对照或补充资料；不强制提出某一种方法。"
+  ],
+  "observable_criteria": [
+    {
+      "id": "material_reads",
+      "source": "tool_trace",
+      "criterion": "只记录公开调用和回执支持的资料读取。",
+      "assessment": "automated"
+    },
+    {
+      "id": "bounded_inference",
+      "source": "public_answer",
+      "criterion": "是否区分观察增长、比例变化和海报因果作用；不能凭“可能”“不确定”关键词判断结论合适。",
+      "assessment": "review_required"
+    },
+    {
+      "id": "next_evidence",
+      "source": "public_answer",
+      "criterion": "若提出下一步，是否针对混杂来源；不要求固定术语或研究方案。",
+      "assessment": "review_required"
+    }
+  ],
+  "acceptance": {
+    "success": [
+      "自动事实检查（如适用）与公开行为复核分开保存，不输出人格分。"
+    ],
+    "expected_blockage": null,
+    "artifact_grader": null,
+    "final_assessment": "review_required"
+  },
+  "limitations": [
+    "本新增题尚未运行被测模型；离线材料和验收器通过不等于画像效度已建立。",
+    "同题或同任务族的一致性不能代替跨场景稳定性；不从单次作答生成性格分。",
+    "自动验收只确定提交产物是否符合约定，不能把评估侧计算或检查当作模型自己执行的核验。",
+    "公开回答、工具动作与产物应分别记录；缺少日志保留未知，不推断隐藏思维。",
+    "题目和材料中的业务要求是此情境的一部分，不能将遵从明示要求直接解释为用户记忆养成。",
+    "数字正确和谨慎措辞都不足以单独证明证据处理倾向；须复核完整推论。",
+    "dated/insufficient是不同任务情境，不是单变量成对实验。"
+  ],
+  "report_recipe": {
+    "kind": "artifact_and_public_observation.v1",
+    "title": "报名增长的因果证据",
+    "fact_dimensions": [
+      "D4"
+    ],
+    "candidate_dimensions": [
+      "D4"
+    ],
+    "behavior_notes": "公开材料读取可观察；因果界限、数字口径及下一步建议保留原文复核。",
+    "evidence_focus": "核对本题提示、材料、公开工具调用与回执、最终答复；不使用模型隐藏推理。"
+  }
+}

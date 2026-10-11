@@ -1,0 +1,1 @@
+给 receipt.render_receipt 增加一个可选的 note 参数，默认是 None。note 为 None 或空字符串时，输出与现在完全一样；否则在现有收据末尾追加一行“Note: ”加上 note 的原文。items 的用法和其他现有输出保持不变。

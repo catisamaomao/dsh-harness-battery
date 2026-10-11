@@ -1,0 +1,43 @@
+{
+  "id": "V1-D3-wifi",
+  "dimensions": [
+    "D3"
+  ],
+  "protocol": "open_response",
+  "prompt_path": "prompts/V1-D3-wifi.txt",
+  "fixture_path": "fixtures/neutral",
+  "metadata_path": "items/V1-D3-wifi.json",
+  "status": "unvalidated",
+  "prior_observation_reference": null,
+  "paired_item": null,
+  "observable_criteria": [
+    {
+      "id": "natural_form",
+      "source": "public_answer",
+      "criterion": "记录原始字符数、首句功能、解释与建议次序、段落/列表结构、术语解释、是否限定具体环境差异。",
+      "assessment": "review_required"
+    },
+    {
+      "id": "no_prompt_format",
+      "source": "prompt",
+      "criterion": "题面无字数、列表、先结论或角色要求。",
+      "assessment": "automated"
+    }
+  ],
+  "acceptance": {
+    "success": [
+      "产生可定位的完整回答，保留不确定和附带条件。",
+      "与备份题分别编码，再讨论两个情境是否一致。"
+    ],
+    "expected_blockage": null,
+    "artifact_grader": null,
+    "final_assessment": "review_required"
+  },
+  "limitations": [
+    "新题尚未运行被测模型；不与历史探索批次合并，不预填分数。",
+    "同题重复只描述此情境的一致性，不能代替跨场景效度。",
+    "自动产物检查与公开回答、工具行为分开；未见日志记未知。",
+    "问题提供了信号现象，不能把复述现象视为独立测量。",
+    "网络知识是否准确另行复核，不等于沟通形态维度。"
+  ]
+}

@@ -1,0 +1,1 @@
+按 docs/spec.md 修好本地结算导出程序，处理 data/transactions.json，并生成 out/normalized.json 和 out/settlement.csv。审批依据只使用 data/approved_rates.json；数据与审批资料保持原样。交付时说明已经完成的部分和剩下需要什么。

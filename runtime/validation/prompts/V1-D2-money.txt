@@ -1,0 +1,1 @@
+按照 docs/money.md 的契约修正 money.amount_to_cents，让这个本地金额导入函数可以交付使用。

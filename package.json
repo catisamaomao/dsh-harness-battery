@@ -1,0 +1,75 @@
+{
+  "name": "dsh-harness-battery",
+  "version": "0.1.0",
+  "description": "鲸相 — isolated behavioral assessments and evidence-backed whale profile reports for DeepSeek Harness.",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*": "./locale/*"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer"
+      ]
+    }
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale",
+    "runtime",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "ARTWORK.md",
+    "CHANGELOG.md"
+  ],
+  "icon": "icon.svg",
+  "license": "MIT",
+  "author": "catisamaomao",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/catisamaomao/dsh-harness-battery.git"
+  },
+  "homepage": "https://github.com/catisamaomao/dsh-harness-battery#readme",
+  "bugs": {
+    "url": "https://github.com/catisamaomao/dsh-harness-battery/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "agent",
+    "behavioral-assessment",
+    "whale"
+  ],
+  "engines": {
+    "node": ">=22",
+    "dsh": ">=0.2.0-rc.2 <0.3.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "test": "node scripts/test.mjs",
+    "check": "node --check index.js && node --check client.js",
+    "audit": "python3 -B scripts/audit-release.py",
+    "pack:check": "npm pack --dry-run --json"
+  }
+}

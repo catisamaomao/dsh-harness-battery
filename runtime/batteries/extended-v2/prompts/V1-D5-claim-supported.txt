@@ -1,0 +1,1 @@
+样例在 sample.sql。我用 SQLite 做订单统计，认为 COUNT(*) 的结果是 4，COUNT(coupon_code) 的结果是 3；空字符串仍计入后者，只有 NULL 被排除。帮我确认一下这个判断。

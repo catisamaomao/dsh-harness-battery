@@ -1,0 +1,5 @@
+{
+  "cache_ttl_seconds": 120,
+  "max_entries": 256,
+  "eviction": "lru"
+}

@@ -1,0 +1,53 @@
+{
+  "id": "V1-D3-wifi",
+  "dimensions": [
+    "D3"
+  ],
+  "protocol": "open_response",
+  "prompt_path": "prompts/V1-D3-wifi.txt",
+  "fixture_path": "fixtures/neutral",
+  "metadata_path": "items/V1-D3-wifi.json",
+  "status": "unvalidated",
+  "prior_observation_reference": null,
+  "paired_item": null,
+  "observable_criteria": [
+    {
+      "id": "natural_form",
+      "source": "public_answer",
+      "criterion": "记录原始字符数、首句功能、解释与建议次序、段落/列表结构、术语解释、是否限定具体环境差异。",
+      "assessment": "review_required"
+    },
+    {
+      "id": "no_prompt_format",
+      "source": "prompt",
+      "criterion": "题面无字数、列表、先结论或角色要求。",
+      "assessment": "automated"
+    }
+  ],
+  "acceptance": {
+    "success": [
+      "产生可定位的完整回答，保留不确定和附带条件。",
+      "与备份题分别编码，再讨论两个情境是否一致。"
+    ],
+    "expected_blockage": null,
+    "artifact_grader": null,
+    "final_assessment": "review_required"
+  },
+  "limitations": [
+    "继承原v1题，原题已有模型运行；本扩展包尚未运行。既有运行不能自动赋予新包或人格解释有效性。",
+    "同题重复只描述此情境的一致性，不能代替跨场景效度。",
+    "自动产物检查与公开回答、工具行为分开；未见日志记未知。",
+    "问题提供了信号现象，不能把复述现象视为独立测量。",
+    "网络知识是否准确另行复核，不等于沟通形态维度。"
+  ],
+  "item_origin": "inherited_v1",
+  "primary_dimension": "D3",
+  "validation_history": {
+    "status": "prior_model_runs_exist",
+    "source_bundle_id": "harness-validation-v1",
+    "source_bundle_sha256": "4cf2c3d7ea272ddec2e4423be3cb4dd3894c61b9f8f70dab09ec25e34b782f61",
+    "source_prompt_sha256": "e7c2c0a759d1728b8b9383618c827ca980d0709d37f01b2a3d4b0c3df49cdae7",
+    "prior_batch_reference": "reports/assessments/20261011-core-runtime-v2/batch.json",
+    "note": "原题已有九题批次实跑；此扩展题包未运行。原题实跑不证明画像效度，不把继承题称为首次新题。"
+  }
+}

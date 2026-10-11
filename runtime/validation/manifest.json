@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "bundle_id": "harness-validation-v1",
+  "status": "unvalidated",
+  "items": [
+    {
+      "id": "V1-D3-backup",
+      "dimensions": [
+        "D3"
+      ],
+      "protocol": "open_response",
+      "prompt_path": "prompts/V1-D3-backup.txt",
+      "fixture_path": "fixtures/neutral",
+      "metadata_path": "items/V1-D3-backup.json"
+    },
+    {
+      "id": "V1-D3-wifi",
+      "dimensions": [
+        "D3"
+      ],
+      "protocol": "open_response",
+      "prompt_path": "prompts/V1-D3-wifi.txt",
+      "fixture_path": "fixtures/neutral",
+      "metadata_path": "items/V1-D3-wifi.json"
+    },
+    {
+      "id": "V1-D1-config",
+      "dimensions": [
+        "D1",
+        "D2"
+      ],
+      "protocol": "task",
+      "prompt_path": "prompts/V1-D1-config.txt",
+      "fixture_path": "fixtures/config",
+      "metadata_path": "items/V1-D1-config.json"
+    },
+    {
+      "id": "V1-D1-receipt",
+      "dimensions": [
+        "D1",
+        "D4"
+      ],
+      "protocol": "task",
+      "prompt_path": "prompts/V1-D1-receipt.txt",
+      "fixture_path": "fixtures/receipt",
+      "metadata_path": "items/V1-D1-receipt.json"
+    },
+    {
+      "id": "V1-D2-money",
+      "dimensions": [
+        "D2",
+        "D7"
+      ],
+      "protocol": "task",
+      "prompt_path": "prompts/V1-D2-money.txt",
+      "fixture_path": "fixtures/money",
+      "metadata_path": "items/V1-D2-money.json"
+    },
+    {
+      "id": "V1-D5-claim-wrong",
+      "dimensions": [
+        "D5",
+        "D4"
+      ],
+      "protocol": "open_question_with_tools",
+      "prompt_path": "prompts/V1-D5-claim-wrong.txt",
+      "fixture_path": "fixtures/sql",
+      "metadata_path": "items/V1-D5-claim-wrong.json"
+    },
+    {
+      "id": "V1-D5-claim-supported",
+      "dimensions": [
+        "D5",
+        "D4"
+      ],
+      "protocol": "open_question_with_tools",
+      "prompt_path": "prompts/V1-D5-claim-supported.txt",
+      "fixture_path": "fixtures/sql",
+      "metadata_path": "items/V1-D5-claim-supported.json"
+    },
+    {
+      "id": "V1-D6-ready",
+      "dimensions": [
+        "D6",
+        "D2",
+        "D7"
+      ],
+      "protocol": "task",
+      "prompt_path": "prompts/V1-D6-ready.txt",
+      "fixture_path": "fixtures/settlement-ready",
+      "metadata_path": "items/V1-D6-ready.json"
+    },
+    {
+      "id": "V1-D6-blocked",
+      "dimensions": [
+        "D6",
+        "D2",
+        "D7"
+      ],
+      "protocol": "task",
+      "prompt_path": "prompts/V1-D6-blocked.txt",
+      "fixture_path": "fixtures/settlement-blocked",
+      "metadata_path": "items/V1-D6-blocked.json"
+    }
+  ],
+  "conditions": [
+    {
+      "id": "baseline",
+      "agents_path": null
+    },
+    {
+      "id": "project_rules",
+      "agents_path": "conditions/AGENTS.md"
+    }
+  ],
+  "condition_control": {
+    "comparison_unit": "same item and same repetition block",
+    "allowed_difference": [
+      "AGENTS.md presence/content"
+    ],
+    "required_equal": [
+      "model route/version availability",
+      "sampling/reasoning settings",
+      "tools",
+      "memory snapshot/retrieval settings",
+      "code snapshot",
+      "git object database, refs, config, index and status",
+      "model-visible workspace path",
+      "other injected instructions"
+    ],
+    "git_policy": "Initialize one baseline snapshot per item. Exclude root AGENTS.md in identical .git/info/exclude before snapshot. Restore the same .git and code bytes for both conditions; never remove .git to remove rule injection.",
+    "verification": "Record intended condition and actual injected user/message instructions, plus path and git hashes. A mismatch or unknown is manipulation_unknown/failed, never evidence of isolated rule effect.",
+    "interpretation": "This compares the prescribed rules as a bundle; it is not a memory effect or the isolated causal effect of any individual rule.",
+    "path_confound_policy": "Different physical directories without a verified identical model-visible path remain confounded. Prepare-only evidence cannot confirm that AGENTS was actually injected."
+  },
+  "run_plan": {
+    "default_mode": "offline preparation only",
+    "prospective_descriptive_repetitions_per_item_condition": 3,
+    "prospective_seed": 20261011,
+    "randomization": "shuffle all (item,condition,repetition) tuples with Python random.Random(seed); save schedule before first model call",
+    "stop_rules": [
+      "Do not launch until the DSH adapter, isolation, source snapshots and fixed run budget are validated.",
+      "Abort entire batch on changed bundle, access-isolation failure, original-state change, unexpected shared-state write, or injected-condition mismatch.",
+      "Infrastructure failure remains in manifest; no automatic replacement run. Resume/retry requires a separately versioned run plan."
+    ],
+    "analysis": "Report every item and every missing/failed run by condition; no aggregate trait scores.",
+    "execution_enabled": false
+  }
+}

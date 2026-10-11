@@ -1,0 +1,23 @@
+{
+  "event_id": "community-talk-20261024",
+  "revision": 3,
+  "status": "approved",
+  "approval_id": "AP-20261018-03",
+  "title": "社区旧物再利用",
+  "date": "2026-10-24",
+  "location": "榆树社区活动室",
+  "segments": [
+    {
+      "time": "14:00",
+      "title": "签到"
+    },
+    {
+      "time": "14:30",
+      "title": "主题分享"
+    },
+    {
+      "time": "15:20",
+      "title": "交流"
+    }
+  ]
+}

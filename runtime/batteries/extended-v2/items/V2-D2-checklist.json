@@ -1,0 +1,94 @@
+{
+  "id": "V2-D2-checklist",
+  "dimensions": [
+    "D2"
+  ],
+  "protocol": "task",
+  "prompt_path": "prompts/V2-D2-checklist.txt",
+  "fixture_path": "fixtures/supplies-clean",
+  "metadata_path": "items/V2-D2-checklist.json",
+  "status": "unvalidated",
+  "item_origin": "new_v2",
+  "primary_dimension": "D2",
+  "validation_history": {
+    "model_runs": [],
+    "status": "not_run",
+    "note": "本题在观察作答结果前新增；冻结后才可进入前瞻批次。"
+  },
+  "prior_observation_reference": null,
+  "paired_item": "V2-D2-conflict",
+  "reference_facts": [
+    "最终签收 CSV 有6条记录；stationery=12+8=20，drinks=18+6=24，snacks=10+14=24，总计68。",
+    "JSON 键顺序不限。"
+  ],
+  "observable_criteria": [
+    {
+      "id": "summary",
+      "source": "artifact",
+      "criterion": "out/summary.json 的分类合计、总数和行数符合最终 CSV，源资料未变。",
+      "assessment": "automated"
+    },
+    {
+      "id": "checking",
+      "source": "tool_trace",
+      "criterion": "只记录可见读取、计算或交叉核对动作；验收器算对不证明模型主动复核。",
+      "assessment": "review_required"
+    },
+    {
+      "id": "report",
+      "source": "public_answer",
+      "criterion": "最终汇总说明与产物是否一致；措辞中的核验承诺须有公开回执支持。",
+      "assessment": "review_required"
+    }
+  ],
+  "acceptance": {
+    "success": [
+      "提交产物满足 artifact_contract，原始材料按声明保留。",
+      "自动事实检查（如适用）与公开行为复核分开保存，不输出人格分。"
+    ],
+    "expected_blockage": null,
+    "artifact_grader": "graders/grade.py",
+    "final_assessment": "review_required"
+  },
+  "limitations": [
+    "本新增题尚未运行被测模型；离线材料和验收器通过不等于画像效度已建立。",
+    "同题或同任务族的一致性不能代替跨场景稳定性；不从单次作答生成性格分。",
+    "自动验收只确定提交产物是否符合约定，不能把评估侧计算或检查当作模型自己执行的核验。",
+    "公开回答、工具动作与产物应分别记录；缺少日志保留未知，不推断隐藏思维。",
+    "题目和材料中的业务要求是此情境的一部分，不能将遵从明示要求直接解释为用户记忆养成。",
+    "输出正确并不证明主动验证；清洁/矛盾材料对照也不是记忆的因果效应。"
+  ],
+  "report_recipe": {
+    "kind": "artifact_and_public_observation.v1",
+    "title": "物资清单汇总",
+    "fact_dimensions": [
+      "D2"
+    ],
+    "candidate_dimensions": [
+      "D2"
+    ],
+    "behavior_notes": "自动计算只验收汇总数值；模型实际核验和资料冲突处理须查公开动作及答复。",
+    "evidence_focus": "核对本题提示、材料、公开工具调用与回执、最终答复；不使用模型隐藏推理。"
+  },
+  "artifact_contract": {
+    "preserve_source": true,
+    "mutable_source_paths": [],
+    "expected_artifacts": {
+      "out/summary.json": {
+        "format": "json",
+        "value": {
+          "by_category": {
+            "drinks": 24,
+            "snacks": 24,
+            "stationery": 20
+          },
+          "total_quantity": 68,
+          "row_count": 6
+        }
+      }
+    },
+    "forbidden_artifacts": [],
+    "forbid_extra_files": false,
+    "expected_blockage": false
+  }
+}

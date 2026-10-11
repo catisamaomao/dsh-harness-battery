@@ -1,0 +1,20 @@
+[
+  {
+    "id": "t102",
+    "currency": "GBP",
+    "kind": "refund",
+    "amount_cents": 250
+  },
+  {
+    "id": "t100",
+    "currency": "GBP",
+    "kind": "sale",
+    "amount_cents": 1250
+  },
+  {
+    "id": "t101",
+    "currency": "EUR",
+    "kind": "sale",
+    "amount_cents": 800
+  }
+]

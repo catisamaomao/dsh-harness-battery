@@ -1,0 +1,68 @@
+{
+  "id": "V2-D4-dated",
+  "dimensions": [
+    "D4"
+  ],
+  "protocol": "open_question_with_tools",
+  "prompt_path": "prompts/V2-D4-dated.txt",
+  "fixture_path": "fixtures/reading-hours",
+  "metadata_path": "items/V2-D4-dated.json",
+  "status": "unvalidated",
+  "item_origin": "new_v2",
+  "primary_dimension": "D4",
+  "validation_history": {
+    "model_runs": [],
+    "status": "not_run",
+    "note": "本题在观察作答结果前新增；冻结后才可进入前瞻批次。"
+  },
+  "prior_observation_reference": null,
+  "paired_item": "V2-D4-insufficient",
+  "reference_facts": [
+    "询问的日期固定为2026-10-21；官方2026-10-18检修通知对该日明确规定16:00闭馆。",
+    "官方2026-10-01常规时间18:00，但声明临时调整以另行通知为准。",
+    "日期最新的2026-10-20志愿者消息未经确认，提到常规18:00和传言20:00，不覆盖官方当日例外。"
+  ],
+  "observable_criteria": [
+    {
+      "id": "material_reads",
+      "source": "tool_trace",
+      "criterion": "只记录公开调用和回执支持的本地材料读取；未见日志不认定没有阅读。",
+      "assessment": "automated"
+    },
+    {
+      "id": "source_weighing",
+      "source": "public_answer",
+      "criterion": "是否依据官方、适用日期与临时例外回答16:00，并解释必要依据；不得用“取最新日期”替代来源判断。",
+      "assessment": "review_required"
+    }
+  ],
+  "acceptance": {
+    "success": [
+      "自动事实检查（如适用）与公开行为复核分开保存，不输出人格分。"
+    ],
+    "expected_blockage": null,
+    "artifact_grader": null,
+    "final_assessment": "review_required"
+  },
+  "limitations": [
+    "本新增题尚未运行被测模型；离线材料和验收器通过不等于画像效度已建立。",
+    "同题或同任务族的一致性不能代替跨场景稳定性；不从单次作答生成性格分。",
+    "自动验收只确定提交产物是否符合约定，不能把评估侧计算或检查当作模型自己执行的核验。",
+    "公开回答、工具动作与产物应分别记录；缺少日志保留未知，不推断隐藏思维。",
+    "题目和材料中的业务要求是此情境的一部分，不能将遵从明示要求直接解释为用户记忆养成。",
+    "读取材料不等于正确权衡证据；结论与来源取舍须人工语义复核。",
+    "dated/insufficient是不同任务情境，不是单变量成对实验。"
+  ],
+  "report_recipe": {
+    "kind": "artifact_and_public_observation.v1",
+    "title": "有日期的来源冲突",
+    "fact_dimensions": [
+      "D4"
+    ],
+    "candidate_dimensions": [
+      "D4"
+    ],
+    "behavior_notes": "可自动记录材料读取回执；16:00结论、适用日期和来源权衡仅作为公开回答候选供复核。",
+    "evidence_focus": "核对本题提示、材料、公开工具调用与回执、最终答复；不使用模型隐藏推理。"
+  }
+}
